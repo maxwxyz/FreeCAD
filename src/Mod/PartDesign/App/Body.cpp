@@ -35,6 +35,7 @@
 #include "FeatureSolid.h"
 #include "FeatureTransformed.h"
 #include "ShapeBinder.h"
+#include "AuxGroup.h"
 
 using namespace PartDesign;
 
@@ -215,6 +216,7 @@ bool Body::isAllowed(const App::DocumentObject *obj)
             obj->isDerivedFrom<Part::Part2DObject>() ||
             obj->isDerivedFrom<PartDesign::ShapeBinder>() ||
             obj->isDerivedFrom<PartDesign::SubShapeBinder>() ||
+            obj->isDerivedFrom(PartDesign::AuxGroup::getClassTypeId())
             // TODO Why this lines was here? why should we allow anything of those? (2015-08-13, Fat-Zer)
             //obj->isDerivedFrom<Part::FeaturePython>() // trouble with this line on Windows!? Linker fails to find getClassTypeId() of the Part::FeaturePython...
             //obj->isDerivedFrom<Part::Feature>()
@@ -230,6 +232,9 @@ Body* Body::findBodyOf(const App::DocumentObject* feature)
 {
     if(!feature)
         return nullptr;
+
+    if (feature->isDerivedFrom(PartDesign::AuxGroup::getClassTypeId()))
+        return static_cast<const PartDesign::AuxGroup*>(feature)->getBody();
 
     return static_cast<Body*>(BodyBase::findBodyOf(feature));
 }

@@ -57,6 +57,7 @@
 #include "FeatureThickness.h"
 #include "FeatureTransformed.h"
 #include "ShapeBinder.h"
+#include "AuxGroup.h"
 
 
 namespace PartDesign
@@ -157,9 +158,10 @@ PyMOD_INIT_FUNC(_PartDesign)
     PartDesign::AdditiveWedge               ::init();
     PartDesign::SubtractiveWedge            ::init();
     PartDesign::FeatureBase                 ::init();
-
+    PartDesign::AuxGroup                    ::init();
     PartDesign::Measure ::initialize();
     // clang-format on
+
 
     PyMOD_Return(mod);
 }

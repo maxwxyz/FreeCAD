@@ -61,7 +61,7 @@
 #include "ViewProviderSketchBased.h"
 #include "ViewProviderThickness.h"
 #include "ViewProviderTransformed.h"
-
+#include "ViewProviderAuxGroup.h"
 
 // use a different name to CreateCommand()
 void CreatePartDesignCommands();
@@ -161,6 +161,7 @@ PyMOD_INIT_FUNC(PartDesignGui)
     PartDesignGui::ViewProviderLoft          ::init();
     PartDesignGui::ViewProviderHelix         ::init();
     PartDesignGui::ViewProviderBase          ::init();
+    PartDesignGui::ViewProviderAuxGroup      ::init();
     // clang-format on
 
     // add resources and reloads the translators

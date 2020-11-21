@@ -48,6 +48,7 @@
 #include <Mod/PartDesign/App/DatumCS.h>
 #include <Mod/PartDesign/App/FeatureSketchBased.h>
 #include <Mod/PartDesign/App/FeatureBase.h>
+#include <Mod/PartDesign/App/AuxGroup.h>
 
 #include "ViewProviderBody.h"
 #include "Utils.h"
@@ -125,7 +126,52 @@ void ViewProviderBody::setupContextMenu(QMenu* menu, QObject* receiver, const ch
         this->toggleActiveBody();
     });
 
-    Gui::ViewProviderGeometryObject::setupContextMenu(menu, receiver, member); // clazy:exclude=skipped-base-method
+    act = menu->addAction(tr("Toggle group"));
+    func->trigger(act,
+        [this]() {
+            auto body = Base::freecad_dynamic_cast<PartDesign::Body>(getObject());
+            if (!body)
+                return;
+            try {
+                std::vector<App::DocumentObjectT> groups;
+                for (auto obj : body->Group.getValues()) {
+                    if (obj->isDerivedFrom(PartDesign::AuxGroup::getClassTypeId()))
+                        groups.emplace_back(obj);
+                }
+                App::AutoTransaction committer("Toggle body group");
+                if (groups.empty()) {
+                    int pos = 0;
+                    auto children = body->Group.getValues();
+                    if (children.size() && children[0] == body->BaseFeature.getValue())
+                        ++pos;
+                    auto sketchGroup = static_cast<PartDesign::AuxGroup*>(
+                            body->getDocument()->addObject("PartDesign::AuxGroup", "Sketches"));
+                    auto datumGroup = static_cast<PartDesign::AuxGroup*>(
+                            body->getDocument()->addObject("PartDesign::AuxGroup", "Datums"));
+                    auto miscGroup = static_cast<PartDesign::AuxGroup*>(
+                            body->getDocument()->addObject("PartDesign::AuxGroup", "Misc"));
+                    children.insert(children.begin()+pos, miscGroup);
+                    children.insert(children.begin()+pos, datumGroup);
+                    children.insert(children.begin()+pos, sketchGroup);
+                    body->Group.setValues(children);
+                    sketchGroup->_Body.setValue(body);
+                    datumGroup->_Body.setValue(body);
+                    miscGroup->_Body.setValue(body);
+                } else {
+                    for (auto & objT : groups) {
+                        auto group = static_cast<PartDesign::AuxGroup*>(objT.getObject());
+                        if (group) {
+                            group->_Body.setValue(nullptr);
+                            body->getDocument()->removeObject(group->getNameInDocument());
+                        }
+                    }
+                }
+            } catch (Base::Exception &e) {
+                e.ReportException();
+            }
+    });
+
+    Gui::ViewProviderGeometryObject::setupContextMenu(menu, receiver, member);
 }
 
 bool ViewProviderBody::isActiveBody()
@@ -365,10 +411,30 @@ bool ViewProviderBody::canDropObject(App::DocumentObject* obj) const
         return !obj->isDerivedFrom<App::Origin>();
     }
     else if (!obj->isDerivedFrom<Part::Feature>()) {
+    if (obj->isDerivedFrom(PartDesign::AuxGroup::getClassTypeId())
+                || !PartDesign::Body::isAllowed(obj))
         return false;
     }
     else if (PartDesign::Body::findBodyOf(obj)) {
         return false;
+
+    // App::Part checking is too restrictive. It may mess up things, or it may
+    // not. Just let user undo if anything is wrong.
+
+    // App::Part *actPart = PartDesignGui::getActivePart();
+    // App::Part* partOfBaseFeature = App::Part::getPartOfObject(obj);
+    // if (partOfBaseFeature != 0 && partOfBaseFeature != actPart)
+    //     return false;
+
+    return true;
+}
+
+bool ViewProviderBody::canDragObject(App::DocumentObject *obj) const
+{
+    if (obj->isDerivedFrom(PartDesign::AuxGroup::getClassTypeId()))
+        return false;
+    PartDesign::Body* body = Base::freecad_dynamic_cast<PartDesign::Body>(getObject());
+    if (!body)
     }
     else if (obj->isDerivedFrom (Part::BodyBase::getClassTypeId())) {
         return false;

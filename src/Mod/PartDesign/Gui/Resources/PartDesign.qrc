@@ -22,6 +22,9 @@
         <file>icons/PartDesign_Fillet.svg</file>
         <file>icons/PartDesign_Flip_Direction.svg</file>
         <file>icons/PartDesign_Groove.svg</file>
+        <file>icons/PartDesign_Group.svg</file>
+        <file>icons/PartDesign_GroupSketch.svg</file>
+        <file>icons/PartDesign_GroupDatum.svg</file>
         <file>icons/PartDesign_Hole.svg</file>
         <file>icons/PartDesign_InternalExternalGear.svg</file>
         <file>icons/PartDesign_Line.svg</file>
