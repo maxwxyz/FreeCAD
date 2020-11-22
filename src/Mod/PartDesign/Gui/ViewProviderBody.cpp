@@ -126,7 +126,7 @@ void ViewProviderBody::setupContextMenu(QMenu* menu, QObject* receiver, const ch
         this->toggleActiveBody();
     });
 
-    act = menu->addAction(tr("Toggle group"));
+    act = menu->addAction(tr("Toggle Auto Group"));
     func->trigger(act,
         [this]() {
             auto body = Base::freecad_dynamic_cast<PartDesign::Body>(getObject());
@@ -135,10 +135,13 @@ void ViewProviderBody::setupContextMenu(QMenu* menu, QObject* receiver, const ch
             try {
                 std::vector<App::DocumentObjectT> groups;
                 for (auto obj : body->Group.getValues()) {
-                    if (obj->isDerivedFrom(PartDesign::AuxGroup::getClassTypeId()))
-                        groups.emplace_back(obj);
+                    if (obj->isDerivedFrom(PartDesign::AuxGroup::getClassTypeId())) {
+                        auto group = static_cast<PartDesign::AuxGroup*>(obj);
+                        if (group->getGroupType() != PartDesign::AuxGroup::OtherGroup)
+                            groups.emplace_back(obj);
+                    }
                 }
-                App::AutoTransaction committer("Toggle body group");
+                App::AutoTransaction committer("Toggle group");
                 if (groups.empty()) {
                     int pos = 0;
                     auto children = body->Group.getValues();
@@ -170,6 +173,23 @@ void ViewProviderBody::setupContextMenu(QMenu* menu, QObject* receiver, const ch
                 e.ReportException();
             }
     });
+
+    act = menu->addAction(tr("Add group"));
+    func->trigger(act,
+        [this]() {
+            auto body = Base::freecad_dynamic_cast<PartDesign::Body>(getObject());
+            if (!body)
+                return;
+            App::AutoTransaction committer("Body add group");
+            try {
+                auto group = static_cast<PartDesign::AuxGroup*>(
+                        body->getDocument()->addObject("PartDesign::AuxGroup", "Group"));
+                body->addObject(group);
+                group->_Body.setValue(body);
+            } catch (Base::Exception &e) {
+                e.ReportException();
+            }
+        });
 
     Gui::ViewProviderGeometryObject::setupContextMenu(menu, receiver, member);
 }
