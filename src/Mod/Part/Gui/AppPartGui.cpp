@@ -77,7 +77,8 @@
 #include "ViewProviderTorusParametric.h"
 #include "Workbench.h"
 #include "WorkbenchManipulator.h"
-
+#include "ViewProviderSectionPlane.h"
+#include <Mod/Part/App/FeatureSectionPlane.h>
 
 // use a different name to CreateCommand()
 void CreatePartCommands();
@@ -220,7 +221,7 @@ PyMOD_INIT_FUNC(PartGui)
     PartGui::ViewProviderRuledSurface               ::init();
     PartGui::ViewProviderFace                       ::init();
     PartGui::ViewProviderProjectOnSurface           ::init();
-
+    PartGui::ViewProviderSectionPlane               ::init();
     PartGui::Workbench                              ::init();
     auto manip = std::make_shared<PartGui::WorkbenchManipulator>();
     Gui::WorkbenchManipulator::installManipulator(manip);
@@ -248,6 +249,9 @@ PyMOD_INIT_FUNC(PartGui)
     (void)new Gui::PrefPageProducer<PartGui::DlgImportExportStep>(QT_TRANSLATE_NOOP("QObject", "Import-Export"));
     Gui::ViewProviderBuilder::add(Part::PropertyPartShape::getClassTypeId(),
                                   PartGui::ViewProviderPart::getClassTypeId());
+    Gui::ViewProviderBuilder::add(
+    Part::SectionPlane::getClassTypeId(),
+    PartGui::ViewProviderSectionPlane::getClassTypeId());
     // clang-format on
 
     // add resources and reloads the translators

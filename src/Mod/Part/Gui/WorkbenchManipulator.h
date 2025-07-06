@@ -55,6 +55,7 @@ private:
     static void addSectionCut(Gui::MenuItem* menuBar);
     static void addSelectionFilter(Gui::ToolBarItem* toolBar);
     static void addDatums(Gui::ToolBarItem* toolBar);
+    static void addSectionPlane(Gui::MenuItem* menuBar);
 };
 
 } // namespace PartGui

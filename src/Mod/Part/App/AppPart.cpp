@@ -89,6 +89,7 @@
 #include "FeaturePartSpline.h"
 #include "FeatureProjectOnSurface.h"
 #include "FeatureRevolution.h"
+#include "FeatureSectionPlane.h"
 #include "Geometry.h"
 #include "Geometry2d.h"
 #include "GeometryBoolExtensionPy.h"
@@ -538,13 +539,14 @@ PyMOD_INIT_FUNC(Part)
     Part::GeomOffsetSurface       	::init();
     Part::GeomPlateSurface        	::init();
     Part::GeomTrimmedSurface      	::init();
-    Part::GeomSurfaceOfRevolution 	::init();
+    Part::GeomSurfaceOfRevolution   ::init();
     Part::GeomSurfaceOfExtrusion  	::init();
     Part::Datum                   	::init();
     Part::DatumPlane             	::init();
     Part::DatumLine                	::init();
     Part::DatumPoint               	::init();
     Part::LocalCoordinateSystem     ::init();
+    Part::SectionPlane              ::init();
 
     // Geometry2d types
     Part::Geometry2d              ::init();

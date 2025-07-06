@@ -193,6 +193,8 @@ SET(Features_SRCS
     FeatureExtrusion.h
     FeatureScale.cpp
     FeatureScale.h
+    FeatureSectionPlane.cpp
+    FeatureSectionPlane.h
     FeatureFace.cpp
     FeatureFace.h
     FeatureFillet.cpp

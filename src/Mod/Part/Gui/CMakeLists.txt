@@ -208,6 +208,8 @@ SET(PartGui_SRCS
     ViewProviderExtrusion.h
     ViewProviderScale.cpp
     ViewProviderScale.h
+    ViewProviderSectionPlane.cpp
+    ViewProviderSectionPlane.h
     ViewProvider2DObject.cpp
     ViewProvider2DObject.h
     ViewProviderMirror.cpp

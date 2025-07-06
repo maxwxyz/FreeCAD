@@ -53,6 +53,7 @@
 #include <Gui/WaitCursor.h>
 
 #include <Mod/Part/App/Datums.h>
+#include <Mod/Part/App/FeatureSectionPlane.h>
 
 #include "BoxSelection.h"
 #include "CrossSections.h"
@@ -2402,6 +2403,38 @@ public:
         return hasActiveDocument();
     }
 };
+
+//===========================================================================
+// Part_SectionPlane
+//===========================================================================
+DEF_STD_CMD_A(CmdPartSectionPlane)
+
+CmdPartSectionPlane::CmdPartSectionPlane()
+  :Command("Part_SectionPlane")
+{
+    sAppModule   = "Part";
+    sGroup       = QT_TR_NOOP("Part");
+    sMenuText    = QT_TR_NOOP("Section Plane");
+    sToolTipText = QT_TR_NOOP("Adds a section plane to clip selected objects");
+    sWhatsThis   = "Part_SectionPlane";
+    sStatusTip   = sToolTipText;
+    sPixmap      = "Part_SectionPlane";  // use an existing icon name or add your own SVG
+}
+
+void CmdPartSectionPlane::activated(int /*iMsg*/)
+{
+    auto doc = App::GetApplication().getActiveDocument();
+    if (!doc) return;
+    // create the object
+    auto* obj = static_cast<Part::SectionPlane*>(
+        doc->addObject("Part::SectionPlane", "SectionPlane"));
+}
+
+bool CmdPartSectionPlane::isActive()
+{
+    return hasActiveDocument();
+}
+
 //---------------------------------------------------------------
 
 void CreatePartCommands()
@@ -2453,4 +2486,5 @@ void CreatePartCommands()
     rcCmdMgr.addCommand(new CmdPartDatumLine());
     rcCmdMgr.addCommand(new CmdPartDatumPoint());
     rcCmdMgr.addCommand(new CmdPartDatums());
+    rcCmdMgr.addCommand(new CmdPartSectionPlane());
 }

@@ -32,6 +32,7 @@ using namespace PartGui;
 void WorkbenchManipulator::modifyMenuBar([[maybe_unused]] Gui::MenuItem* menuBar)
 {
     addSectionCut(menuBar);
+    addSectionPlane(menuBar);
 }
 
 void WorkbenchManipulator::modifyToolBars(Gui::ToolBarItem* toolBar)
@@ -85,5 +86,19 @@ void WorkbenchManipulator::addDatums(Gui::ToolBarItem* toolBar)
         else {
             view->appendItem(add);
         }
+    }
+}
+
+void WorkbenchManipulator::addSectionPlane(Gui::MenuItem* menuBar)
+{
+    const char* axisCross = "Std_AxisCross";
+    auto par = menuBar->findParentOf(axisCross);
+    if (par) {
+        auto item = par->findItem(axisCross);
+        item = par->afterItem(item);
+
+        auto add = new Gui::MenuItem(); // NOLINT
+        add->setCommand("Part_SectionPlane");
+        par->insertItem(item, add);
     }
 }
