@@ -216,7 +216,7 @@ bool Body::isAllowed(const App::DocumentObject *obj)
             obj->isDerivedFrom<Part::Part2DObject>() ||
             obj->isDerivedFrom<PartDesign::ShapeBinder>() ||
             obj->isDerivedFrom<PartDesign::SubShapeBinder>() ||
-            obj->isDerivedFrom(PartDesign::AuxGroup::getClassTypeId())
+            obj->isDerivedFrom(PartDesign::AuxGroup::getClassTypeId()) ||
             // TODO Why this lines was here? why should we allow anything of those? (2015-08-13, Fat-Zer)
             //obj->isDerivedFrom<Part::FeaturePython>() // trouble with this line on Windows!? Linker fails to find getClassTypeId() of the Part::FeaturePython...
             //obj->isDerivedFrom<Part::Feature>()

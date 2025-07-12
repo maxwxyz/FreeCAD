@@ -25,7 +25,6 @@
 #endif
 
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost_bind_bind.hpp>
 
 #include <Base/Console.h>
 #include <Base/Exception.h>
@@ -74,7 +73,7 @@ void AuxGroup::onDocumentRestored()
 
 void AuxGroup::attachBody()
 {
-    auto body = Base::freecad_dynamic_cast<Body>(_Body.getValue());
+    auto body = boost_swap_impl::__can_dynamic_cast<Body>(_Body.getValue());
     if (!body)
         connBody.disconnect();
     else
@@ -132,19 +131,18 @@ bool AuxGroup::isObjectAllowed(const App::DocumentObject *obj) const
 
 PartDesign::Body *AuxGroup::getBody() const
 {
-    return Base::freecad_dynamic_cast<Body>(_Body.getValue());
+    return boost_swap_impl::__can_dynamic_cast<Body>(_Body.getValue());
 }
 
 void AuxGroup::refresh()
 {
     auto body = getBody();
     if (!body) {
-        Group.setValues();
+        Group.setValues(nullptr);
         return;
     }
     if (body->Group.find(getNameInDocument()) != this) {
         _Body.setValue(nullptr);
-        Group.setValues();
         return;
     }
     std::vector<App::DocumentObject *> children;
