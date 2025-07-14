@@ -643,13 +643,27 @@ View3DInventorViewer::~View3DInventorViewer()
 
 void View3DInventorViewer::createStandardCursors()
 {
-    QPixmap panPixmap = BitmapFactory().pixmapFromSvg("cursor-pan", QSize(16,16));
-    QPixmap spinPixmap = BitmapFactory().pixmapFromSvg("cursor-rotate", QSize(16,16));
-    QPixmap zoomPixmap = BitmapFactory().pixmapFromSvg("cursor-zoom", QSize(16,16));
+#ifdef Q_OS_WIN
+    int w = GetSystemMetrics(SM_CXCURSOR);
+    int h = GetSystemMetrics(SM_CYCURSOR);
+    QSize cursorSize(w, h);
+    QPoint hotSpot(w/2, h/2);
+#else
+    QSize cursorSize(16, 16);
+    QPoint hotSpot(8, 8);
+#endif
 
-    this->panCursor = QCursor(panPixmap, 8, 8);
-    this->spinCursor = QCursor(spinPixmap, 8, 8);
-    this->zoomCursor = QCursor(zoomPixmap, 8, 8);
+    QPixmap panPixmap = BitmapFactory().pixmapFromSvg("cursor-pan", cursorSize);
+    QPixmap spinPixmap = BitmapFactory().pixmapFromSvg("cursor-rotate", cursorSize);
+    QPixmap zoomPixmap = BitmapFactory().pixmapFromSvg("cursor-zoom", cursorSize);
+
+    this->panCursor = QCursor(panPixmap);
+    this->spinCursor = QCursor(spinPixmap);
+    this->zoomCursor = QCursor(zoomPixmap);
+
+    this->panCursor.setPos(hotSpot);
+    this->spinCursor.setPos(hotSpot);
+    this->zoomCursor.setPos(hotSpot);
 }
 
 void View3DInventorViewer::aboutToDestroyGLContext()
