@@ -888,6 +888,17 @@ int System::addConstraintArcLength(Arc& a, double* distance, int tagId, bool dri
     constr->setDriving(driving);
     return addConstraint(constr);
 }
+int System::addConstraintC2CMaxDistance(Circle& c1,
+                                        Circle& c2,
+                                        double* val,
+                                        int tagId,
+                                        bool driving)
+{
+    Constraint* constr = new ConstraintC2CMaxDistance(c1, c2, val);
+    constr->setTag(tagId);
+    constr->setDriving(driving);
+    return addConstraint(constr);
+}
 
 
 // derived constraints

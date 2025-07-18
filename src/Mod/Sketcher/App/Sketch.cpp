@@ -3404,6 +3404,32 @@ int Sketch::addDistanceConstraint(int geoId1, int geoId2, double* value, bool dr
     }
 }
 
+// circular-circular maximum distance constraint
+int Sketch::addMaxDistanceConstraint(int geoId1, int geoId2, double* value, bool driving)
+{
+    geoId1 = checkGeoId(geoId1);
+    geoId2 = checkGeoId(geoId2);
+    const GeoDef& gd1 = Geoms[geoId1];
+    const GeoDef& gd2 = Geoms[geoId2];
+    // Only valid for circle or arc pairs
+    if ((gd1.type == Sketch::Circle || gd1.type == Sketch::Arc)
+        && (gd2.type == Sketch::Circle || gd2.type == Sketch::Arc)) {
+        // Obtain GCS Circle references (Arc can be treated as Circle in solver)
+        GCS::Circle* c1 = (gd1.type == Sketch::Arc)
+            ? reinterpret_cast<GCS::Circle*>(&Arcs[gd1.index])
+            : &Circles[gd1.index];
+        GCS::Circle* c2 = (gd2.type == Sketch::Arc)
+            ? reinterpret_cast<GCS::Circle*>(&Arcs[gd2.index])
+            : &Circles[gd2.index];
+        if (!c1 || !c2) {
+            return -1;
+        }
+        int tag = ++ConstraintsCounter;
+        GCSsys.addConstraintC2CMaxDistance(*c1, *c2, value, tag, driving);
+        return tag;
+    }
+    return -1;
+}
 
 int Sketch::addRadiusConstraint(int geoId, double* value, bool driving)
 {

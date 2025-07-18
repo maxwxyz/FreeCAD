@@ -347,7 +347,8 @@ public:
      *   Parameters array, as the case may be.
      */
     int addDistanceConstraint(int geoId1, int geoId2, double* value, bool driving = true);
-
+    /// add a maximum distance constraint between two circular edges
+    int addMaxDistanceConstraint(int geoId1, int geoId2, double* value, bool driving = true);
     /// add a parallel constraint between two lines
     int addParallelConstraint(int geoId1, int geoId2);
     /// add a perpendicular constraint between two lines

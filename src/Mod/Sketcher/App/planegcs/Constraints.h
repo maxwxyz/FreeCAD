@@ -83,6 +83,7 @@ enum ConstraintType
     AngleViaPointAndTwoParams = 34,
     AngleViaTwoPoints = 35,
     ArcLength = 36,
+    C2CMaxDistance = 37,
 };
 
 enum InternalAlignmentType
@@ -1357,6 +1358,23 @@ public:
     ConstraintType getTypeId() override;
 };
 
+// Max distance circle to circle
+class ConstraintC2CMaxDistance: public Constraint
+{
+private:
+    Circle c1;
+    Circle c2;
+    double* target()
+    {
+        return pvec[6];
+    }  // target distance is 7th param
+    // (Note: c1.center.x, c1.center.y, c1.rad, c2.center.x, c2.center.y, c2.rad, target)
+    void errorgrad(double* err, double* grad, double* param) override;
+
+public:
+    ConstraintC2CMaxDistance(Circle& c1, Circle& c2, double* target);
+    ConstraintType getTypeId() override;
+};
 }  // namespace GCS
 
 #endif  // PLANEGCS_CONSTRAINTS_H

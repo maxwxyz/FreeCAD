@@ -3135,4 +3135,74 @@ void ConstraintArcLength::errorgrad(double* err, double* grad, double* param)
     }
 }
 
+//---------------------------------------------------------------------------
+// ConstraintC2CMaxDistance
+//---------------------------------------------------------------------------
+ConstraintC2CMaxDistance::ConstraintC2CMaxDistance(Circle& c1, Circle& c2, double* target)
+    : c1(c1)
+    , c2(c2)
+{
+    // Push geometry parameters: centers (x,y), radii, then target distance
+    pvec.push_back(c1.center.x);
+    pvec.push_back(c1.center.y);
+    pvec.push_back(c1.rad);  // c1.rad is a double* to radius
+    pvec.push_back(c2.center.x);
+    pvec.push_back(c2.center.y);
+    pvec.push_back(c2.rad);  // c2.rad is double* to radius
+    pvec.push_back(target);
+    origpvec = pvec;
+    pvecChangedFlag = true;
+    rescale();
+}
+
+ConstraintType ConstraintC2CMaxDistance::getTypeId()
+{
+    return C2CMaxDistance;
+}
+
+void ConstraintC2CMaxDistance::errorgrad(double* err, double* grad, double* param)
+{
+    // Retrieve parameters
+    double cx1 = *pvec[0], cy1 = *pvec[1], r1 = *pvec[2];
+    double cx2 = *pvec[3], cy2 = *pvec[4], r2 = *pvec[5];
+    double tgt = *pvec[6];
+    // Compute center distance
+    double dx = cx2 - cx1;
+    double dy = cy2 - cy1;
+    double d = std::sqrt(dx * dx + dy * dy);
+    // Error: (distance + sum of radii) - target
+    if (err) {
+        *err = (d + r1 + r2) - tgt;
+    }
+    if (grad) {
+        // Avoid division by zero
+        double invd = (d > 1e-8 ? 1.0 / d : 0.0);
+        if (param == c1.center.x) {
+            *grad = -dx * invd;
+        }
+        else if (param == c1.center.y) {
+            *grad = -dy * invd;
+        }
+        else if (param == c1.rad) {
+            *grad = 1.0;
+        }
+        else if (param == c2.center.x) {
+            *grad = dx * invd;
+        }
+        else if (param == c2.center.y) {
+            *grad = dy * invd;
+        }
+        else if (param == c2.rad) {
+            *grad = 1.0;
+        }
+        else if (param == target()) {
+            *grad = -1.0;
+        }
+        else {
+            *grad = 0.0;
+        }
+    }
+}
+
+
 }  // namespace GCS
