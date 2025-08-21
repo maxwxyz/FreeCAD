@@ -1,0 +1,56 @@
+# .github/workflows/label-pr-from-linked-issues.yml
+name: Label PR from linked issues
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
+jobs:
+  label-from-linked-issues:
+    runs-on: ubuntu-latest
+    env:
+      BUG_ISSUE_LABELS: 'Type: Bug'
+      FEAT_ISSUE_LABELS: 'Type: Feature'
+      PR_LABEL_FOR_BUG: 'Type: Bug'
+      PR_LABEL_FOR_FEATURE: 'Type: Feature'
+      TIE_BREAKER: 'Type: Bug'
+    steps:
+      - name: Label PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const BUG_ISSUE_LABELS = process.env.BUG_ISSUE_LABELS.split(',').map(s => s.trim().toLowerCase());
+            const FEAT_ISSUE_LABELS = process.env.FEAT_ISSUE_LABELS.split(',').map(s => s.trim().toLowerCase());
+            const PR_LABEL_FOR_BUG = process.env.PR_LABEL_FOR_BUG;
+            const PR_LABEL_FOR_FEATURE = process.env.PR_LABEL_FOR_FEATURE;
+            const TIE_BREAKER = process.env.TIE_BREAKER.toLowerCase();
+
+            // Reuse the same logic as before, wrapped into a function
+            async function processPR(prNumber) {
+              core.info(`Processing PR #${prNumber} ...`);
+              // … paste the issue-checking + label-adding logic from before here …
+            }
+
+            if (context.eventName === "workflow_dispatch") {
+              // Manual run → fetch all open PRs
+              const { data: allPRs } = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: "open",
+                per_page: 100
+              });
+              for (const pr of allPRs) {
+                await processPR(pr.number);
+              }
+            } else {
+              // PR event → just handle the one PR
+              await processPR(context.issue.number);
+            }
