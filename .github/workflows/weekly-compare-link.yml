@@ -1,0 +1,81 @@
+name: Weekly: add compare link to release notes
+
+on:
+  release:
+    types: [published]  # run if release/pre-release is published (not for draft)
+
+permissions:
+  contents: write
+
+jobs:
+  update-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add compare link
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const rel   = context.payload.release;
+
+            // Nur für Weekly-Pre-Releases im Format weekly-YYYY.MM.DD
+            const rx = /^weekly-(\d{4})\.(\d{2})\.(\d{2})$/;
+            if (!rel.prerelease || !rx.test(rel.tag_name)) {
+              core.info('Not a weekly pre-release or tag format mismatch; skipping.');
+              return;
+            }
+
+            const currentTag = rel.tag_name;
+            const [, y, m, d] = currentTag.match(rx);
+            const currentKey = `${y}${m}${d}`; // zum Vergleichen
+
+            // get all releases
+            const releases = await github.paginate(
+              github.rest.repos.listReleases,
+              { owner, repo, per_page: 100 }
+            );
+
+            // Find previous weekly
+            const weeklies = releases
+              .filter(r => r.prerelease && typeof r.tag_name === 'string' && rx.test(r.tag_name))
+              .map(r => {
+                const [, Y,M,D] = r.tag_name.match(rx);
+                return { rel: r, key: `${Y}${M}${D}` };
+              })
+              .sort((a,b) => b.key.localeCompare(a.key)); // neueste zuerst
+
+            const previous = weeklies.find(w => w.key < currentKey);
+            if (!previous) {
+              core.info('No previous weekly found; skipping.');
+              return;
+            }
+
+            const prevTag   = previous.rel.tag_name;
+            const compareUrl = `https://github.com/${owner}/${repo}/compare/${prevTag}...${currentTag}`;
+            const linkLine   = `**Changes since last weekly (${prevTag} → ${currentTag}):**\n${compareUrl}\n`;
+
+            // Replace compare link with placeholder
+            const body0 = rel.body || '';
+            let body1;
+            if (body0.includes('<!--DIFF_LINK-->')) {
+              body1 = body0.replace('<!--DIFF_LINK-->', `${compareUrl}`);
+            } else if (body0.includes('**Changes since last weekly:**')) {
+              // Fallback if there is no placeholder
+              body1 = body0.replace(/\*\*Changes since last weekly:[^\n]*\n?/i, `${linkLine}\n`);
+            } else {
+              body1 = `${body0}\n\n${linkLine}`;
+            }
+
+            if (body1 === body0) {
+              core.info('No change to body detected; skipping update.');
+              return;
+            }
+
+            await github.rest.repos.updateRelease({
+              owner, repo,
+              release_id: rel.id,
+              body: body1
+            });
+
+            core.info(`Appended/updated compare link: ${compareUrl}`);
