@@ -1,6 +1,7 @@
 > [!IMPORTANT]
 > Bleeding edge FreeCAD development builds for testing bugfixes, regressions, and recently implemented features. Do not use in a production environment.
 
+**Changes since last weekly:** <!--DIFF_LINK-->
 
 ### How-to use
 
