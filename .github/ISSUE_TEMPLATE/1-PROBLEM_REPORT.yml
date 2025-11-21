@@ -27,8 +27,6 @@ body:
         - Spreadsheet
         - TechDraw
         - Other (specify in description)
-      validations:
-        required: true
 
   - type: textarea
     id: description
