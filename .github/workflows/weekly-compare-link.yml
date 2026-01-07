@@ -1,64 +1,106 @@
-name: Add compare link to weekly release notes
+name: Weekly compare link to release notes
 
 on:
   release:
-    types: [published]   # run when a (pre-)release is published
+    types: [published]   # run automatically when a (pre-)release is published
+  workflow_dispatch:      # allow manual runs too
+    inputs:
+      current_tag:
+        description: "Weekly tag (e.g., weekly-2026.01.07). Leave empty to auto-detect latest weekly pre-release."
+        required: false
+      dry_run:
+        description: "Only compute; do not update the release body."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write        # required to PATCH the release body
 
 jobs:
   update-notes:
-    # Only run for weekly-YYYY.MM.DD pre-releases
-    if: >
-      github.event.release.prerelease == true &&
-      startsWith(github.event.release.tag_name, 'weekly-')
     runs-on: ubuntu-latest
     steps:
       - name: Inject compare link into weekly release notes
         uses: actions/github-script@v7
+        env:
+          # Pass manual inputs via env for convenience
+          CURRENT_TAG: ${{ github.event.inputs.current_tag }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          PLACEHOLDER: "<!--DIFF_LINK-->"
         with:
           script: |
-            // Robust post-publish updater. Handles year boundaries and missing weeks.
+            // Updates the current weekly release notes with a compare link to the previous weekly.
+            // Works for both release-published events and manual (workflow_dispatch) runs.
             const owner = context.repo.owner;
             const repo  = context.repo.repo;
-            const rel   = context.payload.release;
-            const tag   = rel.tag_name;
 
             const rx = /^weekly-(\d{4})\.(\d{2})\.(\d{2})$/;
-            if (!rx.test(tag)) {
-              core.info(`Tag '${tag}' does not match weekly-YYYY.MM.DD; skipping.`);
+
+            // Determine currentTag:
+            // 1) Manual input via workflow_dispatch (env.CURRENT_TAG)
+            // 2) Tag from release event payload
+            // 3) Fallback: newest weekly pre-release
+            let currentTag = process.env.CURRENT_TAG || (context.payload?.release?.tag_name) || null;
+
+            async function detectLatestWeeklyTag() {
+              const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+              const cand = releases.find(r => r.prerelease && typeof r.tag_name === 'string' && rx.test(r.tag_name));
+              return cand?.tag_name || null;
+            }
+
+            if (!currentTag) {
+              currentTag = await detectLatestWeeklyTag();
+            }
+
+            if (!currentTag || !rx.test(currentTag)) {
+              core.info(`No weekly tag detected or tag format mismatch ('${currentTag}'). Skipping.`);
               return;
             }
 
-            // Compute previous = current - 7 days (weekly tag encodes previous week)
-            const toPrevWeeklyTag = (t) => {
-              const [, y, m, d] = t.match(rx);
+            // Resolve the current release object
+            let curRel;
+            try {
+              const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag: currentTag });
+              curRel = data;
+            } catch (e) {
+              core.setFailed(`No release for tag ${currentTag}: ${e.message}`);
+              return;
+            }
+
+            // If event is a normal release (not pre-release), skip automatically-run case;
+            // but allow manual override (manual runs can patch any weekly tag).
+            const isManual = context.eventName === 'workflow_dispatch';
+            if (!isManual && !curRel.prerelease) {
+              core.info('Current release is not a pre-release; skipping (auto run).');
+              return;
+            }
+
+            // Helpers
+            const toPrevWeeklyTag = (tag) => {
+              const [, y, m, d] = tag.match(rx);
               const dt = new Date(Date.UTC(+y, +m - 1, +d));
-              const prev = new Date(dt.getTime() - 7 * 24 * 3600 * 1000);
+              const prev = new Date(dt.getTime() - 7 * 24 * 3600 * 1000); // minus 7 days
               const iso = prev.toISOString().slice(0, 10); // YYYY-MM-DD
               return `weekly-${iso.replace(/-/g, '.')}`;   // weekly-YYYY.MM.DD
             };
             const ymdKey = (t) => t.replace(rx, '$1$2$3'); // YYYYMMDD
 
-            async function tagExists(t) {
+            async function tagExists(tag) {
               try {
-                await github.rest.git.getRef({ owner, repo, ref: `tags/${t}` });
+                await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
                 return true;
               } catch {
                 return false;
               }
             }
 
-            let prevTag = toPrevWeeklyTag(tag);
-            // Fallback: if computed previous tag does not exist, find nearest older weekly by tag date
+            // Compute previous weekly deterministically, then fall back if needed
+            let prevTag = toPrevWeeklyTag(currentTag);
             if (!(await tagExists(prevTag))) {
               core.info(`Computed previous tag ${prevTag} not found; scanning older weeklies...`);
-              const releases = await github.paginate(
-                github.rest.repos.listReleases,
-                { owner, repo, per_page: 100 }
-              );
-              const curKey = ymdKey(tag);
+              const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+              const curKey = ymdKey(currentTag);
               const older = releases
                 .filter(r => r.prerelease && typeof r.tag_name === 'string' && rx.test(r.tag_name))
                 .map(r => ({ tag: r.tag_name, key: ymdKey(r.tag_name) }))
@@ -71,16 +113,21 @@ jobs:
               prevTag = older[0].tag;
             }
 
-            const compareUrl = `https://github.com/${owner}/${repo}/compare/${prevTag}...${tag}`;
-            const head = `**Changes since last weekly (${prevTag} → ${tag}):**\n${compareUrl}\n`;
+            const compareUrl = `https://github.com/${owner}/${repo}/compare/${prevTag}...${currentTag}`;
+            const head = `**Changes since last weekly (${prevTag} → ${currentTag}):**\n${compareUrl}\n`;
+
+            if (process.env.DRY_RUN === 'true') {
+              core.info(`[DRY RUN] Would update release ${currentTag} with: ${compareUrl}`);
+              return;
+            }
 
             // Idempotent body update
-            const placeholder = '<!--DIFF_LINK-->';
-            let body = rel.body || '';
+            let body = curRel.body || '';
             if (body.includes(compareUrl)) {
               core.info('Compare URL already present; done.');
               return;
             }
+            const placeholder = process.env.PLACEHOLDER || '<!--DIFF_LINK-->';
             if (body.includes(placeholder)) {
               body = body.replace(placeholder, compareUrl);
             } else if (/\*\*Changes since last weekly:/i.test(body)) {
@@ -89,7 +136,5 @@ jobs:
               body += (body.endsWith('\n') ? '\n' : '\n\n') + head;
             }
 
-            await github.rest.repos.updateRelease({
-              owner, repo, release_id: rel.id, body
-            });
+            await github.rest.repos.updateRelease({ owner, repo, release_id: curRel.id, body });
             core.info(`Release notes updated with compare link: ${compareUrl}`);
