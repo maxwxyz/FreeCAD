@@ -43,6 +43,74 @@ jobs:
           echo "BUILD_TAG=${BUILD_TAG}" >> "$GITHUB_ENV"
           echo "build_tag=${BUILD_TAG}" >> "$GITHUB_OUTPUT"
 
+      - name: Inject compare link into weekly release notes
+        uses: actions/github-script@v7
+        env:
+          PLACEHOLDER: "<!--DIFF_LINK-->"
+        with:
+          script: |
+            // Determine current weekly tag (from environment or latest weekly pre-release)
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const rx = /^weekly-(\d{4})\.(\d{2})\.(\d{2})$/;
+            let currentTag = process.env.WEEKLY_TAG || context.payload?.release?.tag_name || null;
+            if (!currentTag) {
+              const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+              const w = releases.find(r => r.prerelease && typeof r.tag_name === 'string' && rx.test(r.tag_name));
+              if (w) currentTag = w.tag_name;
+            }
+            if (!currentTag || !rx.test(currentTag)) {
+              core.info(`No weekly tag detected or format mismatch ('${currentTag}'). Skipping.`);
+              return;
+            }
+            // Load current release by tag
+            let curRel;
+            try {
+              const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag: currentTag });
+              curRel = data;
+            } catch (e) {
+              core.setFailed(`No release for tag ${currentTag}: ${e.message}`);
+              return;
+            }
+            if (!curRel.prerelease) {
+              core.info('Current release is not a pre-release; skipping.');
+              return;
+            }
+            // Compute previous = current - 7 days (weekly tag encodes previous week)
+            const toPrevWeeklyTag = (tag) => {
+              const [, y, m, d] = tag.match(rx);
+              const dt = new Date(Date.UTC(+y, +m - 1, +d));
+              const prev = new Date(dt.getTime() - 7 * 24 * 3600 * 1000);
+              const iso = prev.toISOString().slice(0, 10);
+              return `weekly-${iso.replace(/-/g, '.')}`;
+            };
+            const ymdKey = (tag) => tag.replace(rx, '$1$2$3');
+            async function tagExists(tag) {
+              try { await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` }); return true; }
+              catch { return false; }
+            }
+            let prevTag = toPrevWeeklyTag(currentTag);
+            if (!(await tagExists(prevTag))) {
+              const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+              const curKey = ymdKey(currentTag);
+              const older = releases
+                .filter(r => r.prerelease && typeof r.tag_name === 'string' && rx.test(r.tag_name))
+                .map(r => ({ tag: r.tag_name, key: ymdKey(r.tag_name) }))
+                .filter(x => x.key < curKey)
+                .sort((a, b) => b.key.localeCompare(a.key));
+              if (!older.length) { core.info('No older weekly found; nothing to do.'); return; }
+              prevTag = older[0].tag;
+            }
+            const compareUrl = `https://github.com/${owner}/${repo}/compare/${prevTag}...${currentTag}`;
+            const head = `**Changes since last weekly (${prevTag} → ${currentTag}):**\n${compareUrl}\n`;
+            let body = curRel.body || '';
+            if (body.includes(compareUrl)) { core.info('Compare URL already present; done.'); return; }
+            const placeholder = process.env.PLACEHOLDER || '<!--DIFF_LINK-->';
+            if (body.includes(placeholder)) body = body.replace(placeholder, compareUrl);
+            else if (/\*\*Changes since last weekly:/i.test(body)) body = body.replace(/\*\*Changes since last weekly:[^\n]*\n?/i, head + '\n');
+            else body += (body.endsWith('\n') ? '\n' : '\n\n') + head;
+            await github.rest.repos.updateRelease({ owner, repo, release_id: curRel.id, body });
+            core.info('Release notes updated with compare link.');
       - name: Upload Source
         id: upload_source
         shell: bash -l {0}
