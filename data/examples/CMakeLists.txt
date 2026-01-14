@@ -1,6 +1,5 @@
 
 SET(Examples_Files
-    Schenkel.stp
     draft_test_objects.FCStd
     EngineBlock.FCStd
     PartDesignExample.FCStd
