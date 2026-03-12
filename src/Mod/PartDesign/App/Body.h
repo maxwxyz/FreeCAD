@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include <App/PropertyLinks.h>
 #include <Mod/Part/App/BodyBase.h>
 #include <Mod/PartDesign/PartDesignGlobal.h>
 
@@ -44,6 +45,14 @@ class PartDesignExport Body: public Part::BodyBase
 
 public:
     App::PropertyBool AllowCompound;
+
+    /// Display-only proxy objects grouping all Sketches under this Body in the tree.
+    /// Created automatically in setupObject(); not user-manageable.
+    App::PropertyLink SketchesGroup;
+
+    /// Display-only proxy objects grouping all Datum features under this Body in the tree.
+    /// Created automatically in setupObject(); not user-manageable.
+    App::PropertyLink DatumsGroup;
 
     /// True if this body feature is active or was active when the document was last closed
     // App::PropertyBool IsActive;

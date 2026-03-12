@@ -50,6 +50,7 @@
 #include <Mod/PartDesign/App/ShapeBinder.h>
 
 #include "ViewProviderBody.h"
+#include "ViewProviderBodyGroup.h"
 #include "Utils.h"
 #include "ViewProvider.h"
 #include "ViewProviderDatum.h"
@@ -261,6 +262,22 @@ void ViewProviderBody::updateData(const App::Property* prop)
     if (prop == &body->Group || prop == &body->BaseFeature) {
         // ensure all model features are in visual body mode
         setVisualBodyMode(true);
+
+        // Bump the _Revision counter on each group proxy so the tree widget detects
+        // that their children may have changed and re-queries claimChildren().
+        auto bumpRevision = [](App::DocumentObject* groupObj) {
+            if (!groupObj || !groupObj->isAttachedToDocument()) {
+                return;
+            }
+            auto* vp = freecad_cast<ViewProviderBodyGroup*>(
+                Gui::Application::Instance->getViewProvider(groupObj)
+            );
+            if (vp) {
+                vp->_Revision.setValue(vp->_Revision.getValue() + 1);
+            }
+        };
+        bumpRevision(body->SketchesGroup.getValue());
+        bumpRevision(body->DatumsGroup.getValue());
     }
 
     if (prop == &body->Tip) {
@@ -279,6 +296,89 @@ void ViewProviderBody::updateData(const App::Property* prop)
     }
 
     PartGui::ViewProviderPart::updateData(prop);
+}
+
+std::vector<App::DocumentObject*> ViewProviderBody::claimChildren() const
+{
+    // Get the standard children from the extension machinery.
+    // This normally returns:  [Origin, Feature1, Sketch1, Sketch2, Datum1, Feature2, …]
+    // (sketches/datums appear at their natural insertion position in Group)
+    auto children = PartGui::ViewProviderPart::claimChildren();
+
+    PartDesign::Body* body = getObject<PartDesign::Body>();
+    App::DocumentObject* sketchesGroupObj = body->SketchesGroup.getValue();
+    App::DocumentObject* datumsGroupObj = body->DatumsGroup.getValue();
+
+    // If no group proxies exist (should not happen after migration, but be safe),
+    // fall back to the unmodified list so the tree still works.
+    if (!sketchesGroupObj && !datumsGroupObj) {
+        return children;
+    }
+
+    // Collect every object that the group proxies claim so we can remove those
+    // from the Body's direct children (they will appear under the group nodes).
+    std::set<App::DocumentObject*> sketchGroupItems;
+    std::set<App::DocumentObject*> datumGroupItems;
+
+    auto collectGroupItems =
+        [&](App::DocumentObject* groupObj, std::set<App::DocumentObject*>& itemSet) {
+            if (!groupObj || !groupObj->isAttachedToDocument()) {
+                return;
+            }
+            if (auto* vp = Gui::Application::Instance->getViewProvider(groupObj)) {
+                for (auto* obj : vp->claimChildren()) {
+                    itemSet.insert(obj);
+                }
+            }
+        };
+
+    collectGroupItems(sketchesGroupObj, sketchGroupItems);
+    collectGroupItems(datumsGroupObj, datumGroupItems);
+
+    const bool hasSketchItems = !sketchGroupItems.empty();
+    const bool hasDatumItems = !datumGroupItems.empty();
+
+    // Build the result:
+    //   1. Origin (always first, prepended by ViewProviderOriginGroupExtension)
+    //   2. SketchesGroup proxy  (if non-empty)
+    //   3. DatumsGroup proxy    (if non-empty)
+    //   4. Remaining features in their original order
+    //      (individual sketches and datums are excluded — they appear under the groups)
+
+    // Determine the Origin object so we can keep it at position 0.
+    App::DocumentObject* origin = nullptr;
+    if (auto* originExt = body->getExtensionByType<App::OriginGroupExtension>(true)) {
+        origin = originExt->Origin.getValue();
+    }
+
+    std::vector<App::DocumentObject*> result;
+
+    // Step 1: add Origin if it heads the list.
+    if (origin && !children.empty() && children.front() == origin) {
+        result.push_back(origin);
+    }
+
+    // Step 2: add group proxies (only when they have content).
+    if (hasSketchItems && sketchesGroupObj) {
+        result.push_back(sketchesGroupObj);
+    }
+    if (hasDatumItems && datumsGroupObj) {
+        result.push_back(datumsGroupObj);
+    }
+
+    // Step 3: add features, skipping Origin (already added) and items that belong
+    //         to one of the group proxies.
+    for (auto* obj : children) {
+        if (obj == origin) {
+            continue;  // already at position 0
+        }
+        if (sketchGroupItems.count(obj) || datumGroupItems.count(obj)) {
+            continue;  // will appear under SketchesGroup / DatumsGroup
+        }
+        result.push_back(obj);
+    }
+
+    return result;
 }
 
 void ViewProviderBody::onChanged(const App::Property* prop)

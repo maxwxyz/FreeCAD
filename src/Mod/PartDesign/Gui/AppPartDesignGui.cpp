@@ -35,6 +35,7 @@
 #include "Workbench.h"
 #include "ViewProviderBase.h"
 #include "ViewProviderBody.h"
+#include "ViewProviderBodyGroup.h"
 #include "ViewProviderBoolean.h"
 #include "ViewProviderChamfer.h"
 #include "ViewProviderDatumCS.h"
@@ -129,6 +130,7 @@ PyMOD_INIT_FUNC(PartDesignGui)
     PartDesignGui::ViewProvider              ::init();
     PartDesignGui::ViewProviderPython        ::init();
     PartDesignGui::ViewProviderBody          ::init();
+    PartDesignGui::ViewProviderBodyGroup     ::init();
     PartDesignGui::ViewProviderSketchBased   ::init();
     PartDesignGui::ViewProviderExtrude       ::init();
     PartDesignGui::ViewProviderPocket        ::init();

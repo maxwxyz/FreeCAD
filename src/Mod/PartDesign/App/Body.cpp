@@ -29,6 +29,7 @@
 #include <Base/Placement.h>
 
 #include "Body.h"
+#include "BodyGroup.h"
 #include "BodyPy.h"
 #include "FeatureBase.h"
 #include "FeatureSketchBased.h"
@@ -44,6 +45,20 @@ PROPERTY_SOURCE(PartDesign::Body, Part::BodyBase)
 Body::Body()
 {
     ADD_PROPERTY_TYPE(AllowCompound, (true), "Base", App::Prop_None, "Allow multiple solids in Body");
+    ADD_PROPERTY_TYPE(
+        SketchesGroup,
+        (nullptr),
+        "Base",
+        (App::PropertyType)(App::Prop_ReadOnly | App::Prop_Hidden),
+        "Display-only proxy grouping all Sketches in this Body"
+    );
+    ADD_PROPERTY_TYPE(
+        DatumsGroup,
+        (nullptr),
+        "Base",
+        (App::PropertyType)(App::Prop_ReadOnly | App::Prop_Hidden),
+        "Display-only proxy grouping all Datum features in this Body"
+    );
 
     _GroupTouched.setStatus(App::Property::Output, true);
 }
@@ -471,6 +486,18 @@ void Body::onChanged(const App::Property* prop)
                     || !Group.getValues().front()->isDerivedFrom<FeatureBase>())) {
                 BaseFeature.setValue(nullptr);
             }
+            // Touch the group proxies so the tree widget detects their children changed.
+            // The ViewProvider for each BodyGroup increments its _Revision property in
+            // response to this touch, which causes the tree to re-query claimChildren().
+            auto touchGroup = [](App::PropertyLink& link) {
+                if (auto* obj = link.getValue()) {
+                    if (obj->isAttachedToDocument() && !obj->isRemoving()) {
+                        obj->touch();
+                    }
+                }
+            };
+            touchGroup(SketchesGroup);
+            touchGroup(DatumsGroup);
         }
         else if (prop == &AllowCompound) {
             // As disallowing compounds can break the model we need to recompute the whole tree.
@@ -502,10 +529,42 @@ void Body::onChanged(const App::Property* prop)
 void Body::setupObject()
 {
     Part::BodyBase::setupObject();
+
+    auto* doc = getDocument();
+
+    // Create the display-only Sketches group proxy, analogous to App::Origin.
+    // It dynamically shows all Part::Part2DObject members of this Body in the tree.
+    auto* sketchesObj = doc->addObject("PartDesign::BodyGroup", "Sketches");
+    auto* sketchesGroup = static_cast<BodyGroup*>(sketchesObj);
+    sketchesGroup->GroupType.setValue(static_cast<long>(BodyGroup::Sketches));
+    sketchesGroup->Body.setValue(this);
+    sketchesGroup->Label.setValue(QT_TRANSLATE_NOOP("PartDesign_BodyGroup", "Sketches"));
+    SketchesGroup.setValue(sketchesObj);
+
+    // Create the display-only Datums group proxy.
+    // It dynamically shows all datum features (plane, point, line, CS…) in the tree.
+    auto* datumsObj = doc->addObject("PartDesign::BodyGroup", "Datums");
+    auto* datumsGroup = static_cast<BodyGroup*>(datumsObj);
+    datumsGroup->GroupType.setValue(static_cast<long>(BodyGroup::Datums));
+    datumsGroup->Body.setValue(this);
+    datumsGroup->Label.setValue(QT_TRANSLATE_NOOP("PartDesign_BodyGroup", "Datums"));
+    DatumsGroup.setValue(datumsObj);
 }
 
 void Body::unsetupObject()
 {
+    // Remove the display-only group proxies when the Body is deleted.
+    auto removeIfAttached = [this](App::PropertyLink& link) {
+        if (auto* obj = link.getValue()) {
+            if (obj->isAttachedToDocument() && !obj->isRemoving()) {
+                getDocument()->removeObject(obj->getNameInDocument());
+            }
+            link.setValue(nullptr);
+        }
+    };
+    removeIfAttached(SketchesGroup);
+    removeIfAttached(DatumsGroup);
+
     Part::BodyBase::unsetupObject();
 }
 
@@ -605,6 +664,30 @@ void Body::onDocumentRestored()
     // trigger ViewProviderBody::copyColorsfromTip
     if (Tip.getValue()) {
         Tip.touch();
+    }
+
+    // Migrate older documents that were saved before SketchesGroup / DatumsGroup
+    // were introduced.  setupObject() is only called for newly-created objects, so
+    // we need to create the group proxies here for existing files.
+    if (!SketchesGroup.getValue() || !DatumsGroup.getValue()) {
+        auto* doc = getDocument();
+
+        if (!SketchesGroup.getValue()) {
+            auto* sketchesObj = doc->addObject("PartDesign::BodyGroup", "Sketches");
+            auto* sg = static_cast<BodyGroup*>(sketchesObj);
+            sg->GroupType.setValue(static_cast<long>(BodyGroup::Sketches));
+            sg->Body.setValue(this);
+            sg->Label.setValue(QT_TRANSLATE_NOOP("PartDesign_BodyGroup", "Sketches"));
+            SketchesGroup.setValue(sketchesObj);
+        }
+        if (!DatumsGroup.getValue()) {
+            auto* datumsObj = doc->addObject("PartDesign::BodyGroup", "Datums");
+            auto* dg = static_cast<BodyGroup*>(datumsObj);
+            dg->GroupType.setValue(static_cast<long>(BodyGroup::Datums));
+            dg->Body.setValue(this);
+            dg->Label.setValue(QT_TRANSLATE_NOOP("PartDesign_BodyGroup", "Datums"));
+            DatumsGroup.setValue(datumsObj);
+        }
     }
 
     DocumentObject::onDocumentRestored();

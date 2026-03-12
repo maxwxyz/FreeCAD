@@ -23,6 +23,8 @@ SET(Features_SRCS
     FeatureSolid.h
     Body.cpp
     Body.h
+    BodyGroup.cpp
+    BodyGroup.h
     FeatureBase.h
     FeatureBase.cpp
 )

@@ -85,6 +85,13 @@ public:
     PartDesign::Feature* getShownFeature() const;
     ViewProvider* getShownViewProvider() const;
 
+    /**
+     * Override to inject the SketchesGroup and DatumsGroup proxy objects into the
+     * body's tree children list and exclude the individual sketches/datums from
+     * appearing as direct children of the Body (they will be shown under the group).
+     */
+    std::vector<App::DocumentObject*> claimChildren() const override;
+
     /** Check whether objects can be added to the view provider by drag and drop */
     bool canDropObjects() const override;
     /** Check whether the object can be dropped to the view provider by drag and drop */

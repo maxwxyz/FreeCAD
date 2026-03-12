@@ -29,6 +29,7 @@
 #include <Gui/Application.h>
 #include <Gui/Utilities.h>
 #include <Mod/Sketcher/App/SketchObject.h>
+#include <Mod/PartDesign/App/Body.h>
 #include <Mod/PartDesign/App/FeatureSketchBased.h>
 
 #include "ViewProviderSketchBased.h"
@@ -76,13 +77,23 @@ ViewProviderSketchBased::~ViewProviderSketchBased() = default;
 
 std::vector<App::DocumentObject*> ViewProviderSketchBased::claimChildren() const
 {
-    std::vector<App::DocumentObject*> temp;
     App::DocumentObject* sketch = getObject<PartDesign::ProfileBased>()->Profile.getValue();
-    if (sketch && !sketch->isDerivedFrom<PartDesign::Feature>()) {
-        temp.push_back(sketch);
+    if (!sketch || sketch->isDerivedFrom<PartDesign::Feature>()) {
+        return {};
     }
 
-    return temp;
+    // If the parent Body has a SketchesGroup proxy the sketch will be shown there
+    // (under Body > Sketches), so we must not also claim it here (under the feature).
+    // This avoids duplicating the sketch in the tree.
+    // Fall back to the legacy behaviour (sketch under feature) only for old documents
+    // that were loaded before the group proxy existed.
+    if (auto* body = PartDesign::Body::findBodyOf(getObject())) {
+        if (body->SketchesGroup.getValue()) {
+            return {};
+        }
+    }
+
+    return {sketch};
 }
 
 void ViewProviderSketchBased::attach(App::DocumentObject* pcObject)
