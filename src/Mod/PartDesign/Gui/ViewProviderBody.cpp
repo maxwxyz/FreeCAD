@@ -33,10 +33,13 @@
 #include <Base/Console.h>
 #include <Gui/ActionFunction.h>
 #include <Gui/Application.h>
+#include <Gui/Tree.h>
 #include <Gui/Command.h>
 #include <Gui/Document.h>
 #include <Gui/MDIView.h>
 #include <Gui/ViewProviderDatum.h>
+#include <Mod/Part/App/Datums.h>
+#include <Mod/Part/App/Part2DObject.h>
 #include <Mod/PartDesign/App/Body.h>
 #include <Mod/PartDesign/App/FeatureSketchBased.h>
 #include <Mod/PartDesign/App/FeatureBase.h>
@@ -200,6 +203,19 @@ void ViewProviderBody::setupContextMenu(QMenu* menu, QObject* receiver, const ch
     act->setCheckable(true);
     act->setChecked(isActiveBody());
     func->trigger(act, [this]() { this->toggleActiveBody(); });
+
+    auto hGrp = App::GetApplication()
+                    .GetUserParameter()
+                    .GetGroup("BaseApp")
+                    ->GetGroup("Preferences")
+                    ->GetGroup("Mod/PartDesign");
+    QAction* autoGroupAct = menu->addAction(tr("Auto Group Elements"));
+    autoGroupAct->setCheckable(true);
+    autoGroupAct->setChecked(hGrp->GetBool("ShowBodyAutoGroups", true));
+    func->trigger(autoGroupAct, [hGrp]() {
+        hGrp->SetBool("ShowBodyAutoGroups", !hGrp->GetBool("ShowBodyAutoGroups", true));
+        Gui::TreeWidget::refreshAutoGroups();
+    });
 
     Gui::ViewProviderGeometryObject::setupContextMenu(menu, receiver, member);  // clazy:exclude=skipped-base-method
 }
@@ -638,4 +654,63 @@ void ViewProviderBody::show()
     if (!foundVisible) {
         tip->Visibility.setValue(true);
     }
+}
+
+std::vector<Gui::ViewProvider::AutoGroupDesc> ViewProviderBody::getAutoGroups() const
+{
+    if (!App::GetApplication()
+             .GetUserParameter()
+             .GetGroup("BaseApp")
+             ->GetGroup("Preferences")
+             ->GetGroup("Mod/PartDesign")
+             ->GetBool("ShowBodyAutoGroups", true)) {
+        return {};
+    }
+
+    auto* body = dynamic_cast<PartDesign::Body*>(getObject());
+    if (!body) {
+        return {};
+    }
+
+    AutoGroupDesc sketches, datums, auxiliary;
+    sketches.label = tr("Sketches");
+    sketches.iconName = QStringLiteral("Sketcher_NewSketch");
+    datums.label = tr("Datums");
+    datums.iconName = QStringLiteral("PartDesign_Plane");
+    auxiliary.label = tr("Auxiliary");
+    auxiliary.iconName = QStringLiteral("PartDesign_ShapeBinder");
+
+    for (auto* obj : body->Group.getValues()) {
+        if (!obj || !obj->isAttachedToDocument()) {
+            continue;
+        }
+        if (obj->isDerivedFrom<Part::Part2DObject>()) {
+            sketches.children.push_back(obj);
+        }
+        else if (
+            obj->isDerivedFrom<Part::DatumPlane>() || obj->isDerivedFrom<Part::DatumLine>()
+            || obj->isDerivedFrom<Part::DatumPoint>()
+            || obj->isDerivedFrom<Part::LocalCoordinateSystem>()
+        ) {
+            datums.children.push_back(obj);
+        }
+        else if (
+            obj->isDerivedFrom<PartDesign::ShapeBinder>()
+            || obj->isDerivedFrom<PartDesign::SubShapeBinder>()
+        ) {
+            auxiliary.children.push_back(obj);
+        }
+    }
+
+    std::vector<AutoGroupDesc> result;
+    if (!sketches.children.empty()) {
+        result.push_back(std::move(sketches));
+    }
+    if (!datums.children.empty()) {
+        result.push_back(std::move(datums));
+    }
+    if (!auxiliary.children.empty()) {
+        result.push_back(std::move(auxiliary));
+    }
+    return result;
 }

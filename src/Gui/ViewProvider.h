@@ -408,6 +408,26 @@ public:
     /** deliver the children belonging to this object recursively.
      */
     virtual std::vector<App::DocumentObject*> claimChildrenRecursive() const;
+
+    /** Describes a virtual group folder to be injected into the tree below this item.
+     * The folder is a purely visual QTreeWidgetItem with no backing document object.
+     * Groups with an empty children vector are omitted.
+     */
+    struct AutoGroupDesc
+    {
+        QString label;
+        QString iconName;
+        std::vector<App::DocumentObject*> children;
+    };
+
+    /** Return virtual group folders to display under this item in the tree.
+     * Called by DocumentItem::populateItem() after the regular children sync.
+     * The default implementation returns an empty list (no groups).
+     */
+    virtual std::vector<AutoGroupDesc> getAutoGroups() const
+    {
+        return {};
+    }
     //@}
 
     /** @name Drag and drop

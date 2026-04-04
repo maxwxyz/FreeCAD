@@ -53,6 +53,7 @@
 #include <App/AutoTransaction.h>
 #include <App/GeoFeatureGroupExtension.h>
 #include <App/Link.h>
+#include <App/Origin.h>
 
 #include "Tree.h"
 #include "BitmapFactory.h"
@@ -91,6 +92,7 @@ std::set<TreeWidget*> TreeWidget::Instances;
 static TreeWidget* _LastSelectedTreeWidget;
 const int TreeWidget::DocumentType = 1000;
 const int TreeWidget::ObjectType = 1001;
+const int VirtualGroupItem::VirtualGroupType = 1002;
 static bool _DraggingActive;
 static bool _DragEventFilter;
 
@@ -1705,6 +1707,35 @@ TreeWidget* TreeWidget::instance()
     return res;
 }
 
+void TreeWidget::refreshAutoGroups()
+{
+    for (auto* tree : Instances) {
+        tree->_refreshAutoGroups();
+    }
+}
+
+void TreeWidget::_refreshAutoGroups()
+{
+    std::function<void(DocumentItem*, QTreeWidgetItem*)> walk;
+    walk = [&](DocumentItem* docItem, QTreeWidgetItem* parent) {
+        for (int i = 0; i < parent->childCount(); ++i) {
+            auto* child = parent->child(i);
+            if (child->type() == ObjectType) {
+                auto* doi = static_cast<DocumentObjectItem*>(child);
+                docItem->syncVirtualGroups(doi);
+                walk(docItem, doi);
+            }
+        }
+    };
+
+    for (int i = 0; i < topLevelItemCount(); ++i) {
+        auto* docItem = dynamic_cast<DocumentItem*>(topLevelItem(i));
+        if (docItem) {
+            walk(docItem, docItem);
+        }
+    }
+}
+
 void TreeWidget::setupResizableColumn(TreeWidget* tree)
 {
     auto mode = TreeParams::getResizableColumn() ? QHeaderView::Interactive
@@ -2034,6 +2065,29 @@ void TreeWidget::mousePressEvent(QMouseEvent* event)
                 return;
             }
         }
+
+        // Handle visibility icon click for virtual group folders
+        if (item && item->type() == VirtualGroupItem::VirtualGroupType
+            && event->button() == Qt::LeftButton) {
+            auto* vgi = static_cast<VirtualGroupItem*>(item);
+
+            auto iconRect = visualItemRect(vgi);
+            auto* style = this->style();
+            if (isSelectionCheckBoxesEnabled()) {
+                int cbw = style->pixelMetric(QStyle::PM_IndicatorWidth)
+                    + style->pixelMetric(QStyle::PM_LayoutHorizontalSpacing);
+                iconRect.adjust(cbw, 0, 0, 0);
+            }
+            iconRect.adjust(style->pixelMetric(QStyle::PM_FocusFrameHMargin) + 1, 0, 0, 0);
+            iconRect.setWidth(iconSize());
+
+            if (iconRect.contains(event->pos())) {
+                vgi->setGroupVisible(!vgi->isGroupVisible());
+                visibilityIconDoubleClickTimer.start();
+                event->accept();
+                return;
+            }
+        }
     }
 
     QTreeWidget::mousePressEvent(event);
@@ -2329,7 +2383,8 @@ void TreeWidget::dragMoveEvent(QDragMoveEvent* event)
         // if we are in between or if target doesn't accept drops then the target is the parent
         if (da == Qt::MoveAction && (targetInfo.inThresholdZone || !vp->canDropObjects())) {
             targetInfo.targetItem = targetInfo.targetItem->parent();
-            if (targetInfo.targetItem->type() == TreeWidget::DocumentType) {
+            if (!targetInfo.targetItem || targetInfo.targetItem->type() == TreeWidget::DocumentType
+                || targetInfo.targetItem->type() == VirtualGroupItem::VirtualGroupType) {
                 leaveEvent(nullptr);
                 return;
             }
@@ -2722,8 +2777,12 @@ bool TreeWidget::dropInObject(
     // if we are in between or if target doesn't accept drops then the target is the parent
     if (da == Qt::MoveAction && (targetInfo.inThresholdZone || !vp->canDropObjects())) {
         targetInfo.targetItem = targetInfo.targetItem->parent();
-        if (targetInfo.targetItem->type() == TreeWidget::DocumentType) {
+        if (!targetInfo.targetItem || targetInfo.targetItem->type() == TreeWidget::DocumentType) {
             return dropInDocument(event, targetInfo, items);
+        }
+        if (targetInfo.targetItem->type() == VirtualGroupItem::VirtualGroupType) {
+            TREE_TRACE("cannot drop onto virtual group");
+            return false;
         }
 
         targetItemObj = static_cast<DocumentObjectItem*>(targetInfo.targetItem);
@@ -4867,6 +4926,8 @@ void DocumentItem::populateItem(DocumentObjectItem* item, bool refresh, bool del
     if (updated) {
         getTree()->_updateStatus();
     }
+
+    syncVirtualGroups(item);
 }
 
 int DocumentItem::findRootIndex(App::DocumentObject* childObj)
@@ -4950,6 +5011,51 @@ int DocumentItem::findRootIndex(App::DocumentObject* childObj)
         return -1;
     }
     return first;
+}
+
+void DocumentItem::syncVirtualGroups(DocumentObjectItem* item)
+{
+    auto* vp = item->myData->viewObject;
+    auto groups = vp->getAutoGroups();
+
+    // Remove all existing VirtualGroupItems from this item
+    for (int j = item->childCount() - 1; j >= 0; --j) {
+        if (item->child(j)->type() == VirtualGroupItem::VirtualGroupType) {
+            delete item->takeChild(j);
+        }
+    }
+
+    if (groups.empty()) {
+        return;
+    }
+
+    // Find insertion point: directly after the Origin item, or 0 if not found
+    int insertPos = 0;
+    for (int j = 0; j < item->childCount(); ++j) {
+        auto* ci = item->child(j);
+        if (ci->type() == TreeWidget::ObjectType) {
+            auto* doi = static_cast<DocumentObjectItem*>(ci);
+            if (doi->object()->getObject()->isDerivedFrom<App::Origin>()) {
+                insertPos = j + 1;
+                break;
+            }
+        }
+    }
+
+    int offset = 0;
+    for (auto& grp : groups) {
+        auto* vgi = new VirtualGroupItem(grp.label, grp.iconName, nullptr);
+        item->insertChild(insertPos + offset, vgi);
+        ++offset;
+
+        for (auto* child : grp.children) {
+            auto it = ObjectMap.find(child);
+            if (it == ObjectMap.end()) {
+                continue;
+            }
+            createNewItem(*it->second->viewObject, vgi, -1, it->second);
+        }
+    }
 }
 
 void DocumentItem::sortObjectItems()
@@ -5529,15 +5635,40 @@ void DocumentItem::updateItemSelection(DocumentObjectItem* item)
         }
         obj = topParent;
     }
+
+    // When this item lives under a VirtualGroupItem, getSubName returns an
+    // empty path (no topParent), which gives the 3D view insufficient context
+    // to highlight the object inside its parent Body.  Find the canonical DOI
+    // (the one shown under the feature or as a direct Body child) and borrow
+    // its subname so the correct addSelection path is used.
+    if (item->parent() && item->parent()->type() == VirtualGroupItem::VirtualGroupType) {
+        auto skelObj = item->object()->getObject();
+        auto it2 = ObjectMap.find(skelObj);
+        if (it2 != ObjectMap.end()) {
+            for (auto ci : it2->second->items) {
+                if (ci == item) {
+                    continue;
+                }
+                if (ci->parent() && ci->parent()->type() != VirtualGroupItem::VirtualGroupType) {
+                    std::ostringstream cstr;
+                    App::DocumentObject* cTop = nullptr;
+                    ci->getSubName(cstr, cTop);
+                    if (cTop) {
+                        if (!ci->object()->getObject()->redirectSubName(cstr, cTop, nullptr)) {
+                            cstr << ci->object()->getObject()->getNameInDocument() << '.';
+                        }
+                        str.str(cstr.str());
+                        obj = cTop;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
     const char* objname = obj->getNameInDocument();
     const char* docname = obj->getDocument()->getName();
     const auto& subname = str.str();
-
-#ifdef FC_DEBUG
-    if (!subname.empty()) {
-        assert(item->getParentItem());
-    }
-#endif
 
     if (!selected) {
         // Handles deselection for same name object and subname
@@ -5700,6 +5831,16 @@ DocumentObjectItem* DocumentItem::findItemByObject(
     auto it = ObjectMap.find(obj);
     if (it == ObjectMap.end() || it->second->items.empty()) {
         return nullptr;
+    }
+
+    // If the user just clicked a VirtualGroupItem child, that DOI is
+    // Qt-selected.  Prefer it so selectItems() doesn't deselect it in favour
+    // of the canonical item (which would look like nothing is selected).
+    for (auto item : it->second->items) {
+        if (item->isSelected() && item->parent()
+            && item->parent()->type() == VirtualGroupItem::VirtualGroupType) {
+            return findItem(sync, item, subname, select);
+        }
     }
 
     // prefer top level item of this object
@@ -6029,6 +6170,73 @@ void DocumentItem::updateSelection()
     bool lock = getTree()->blockSelection(true);
     updateSelection(this, false);
     getTree()->blockSelection(lock);
+}
+
+// ----------------------------------------------------------------------------
+
+VirtualGroupItem::VirtualGroupItem(const QString& label, const QString& iconName, QTreeWidgetItem* parent)
+    : QTreeWidgetItem(parent, VirtualGroupType)
+    , _label(label)
+    , _iconName(iconName)
+{
+    setText(0, label);
+    updateIcon();
+    setFlags(
+        flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled & ~Qt::ItemIsDropEnabled
+        & ~Qt::ItemIsSelectable
+    );
+}
+
+void VirtualGroupItem::updateIcon()
+{
+    QIcon folderIcon(BitmapFactory().pixmap(_iconName.toUtf8().constData()));
+
+    if (!isVisibilityIconEnabled()) {
+        setIcon(0, folderIcon);
+        return;
+    }
+
+    static QPixmap pxVisible, pxInvisible;
+    if (pxVisible.isNull()) {
+        pxVisible = BitmapFactory().pixmap("TreeItemVisible");
+    }
+    if (pxInvisible.isNull()) {
+        pxInvisible = BitmapFactory().pixmap("TreeItemInvisible");
+    }
+
+    const QPixmap& eyePx = _visible ? pxVisible : pxInvisible;
+    QPixmap px_org = folderIcon.pixmap(0xFFFF, 0xFFFF);
+
+    int spacing = QApplication::style()->pixelMetric(QStyle::PM_LayoutHorizontalSpacing);
+    QPixmap px(2 * px_org.width() + spacing, px_org.height());
+    px.fill(Qt::transparent);
+
+    QPainter pt(&px);
+    pt.setPen(Qt::NoPen);
+    pt.drawPixmap(0, 0, px_org.width(), px_org.height(), eyePx);
+    pt.drawPixmap(px_org.width() + spacing, 0, px_org.width(), px_org.height(), px_org);
+    pt.end();
+
+    setIcon(0, QIcon(px));
+}
+
+void VirtualGroupItem::setGroupVisible(bool v)
+{
+    _visible = v;
+    updateIcon();
+
+    QColor color = v ? QApplication::palette().color(QPalette::Text)
+                     : QApplication::palette().color(QPalette::Disabled, QPalette::Text);
+    setForeground(0, color);
+
+    for (int i = 0; i < childCount(); ++i) {
+        QTreeWidgetItem* ci = this->child(i);
+        if (ci->type() == TreeWidget::ObjectType) {
+            auto* doi = static_cast<DocumentObjectItem*>(ci);
+            auto* obj = doi->object()->getObject();
+            obj->Visibility.setValue(v);
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------

@@ -101,6 +101,12 @@ public:
     static const int DocumentType;
     static const int ObjectType;
 
+    /** Force-rebuild all VirtualGroupItems in every tree instance.
+     * Call after toggling the ShowBodyAutoGroups preference so the change takes
+     * effect immediately without requiring a model change.
+     */
+    static void refreshAutoGroups();
+
     void markItem(const App::DocumentObject* Obj, bool mark);
     void syncView(ViewProviderDocumentObject* vp);
 
@@ -312,6 +318,8 @@ private:
 
     static std::set<TreeWidget*> Instances;
 
+    void _refreshAutoGroups();
+
     std::string myName;  // for debugging purpose
     int updateBlocked = 0;
 
@@ -364,6 +372,7 @@ public:
     void testStatus();
     void setData(int column, int role, const QVariant& value) override;
     void populateItem(DocumentObjectItem* item, bool refresh = false, bool delayUpdate = true);
+    void syncVirtualGroups(DocumentObjectItem* item);
     bool populateObject(App::DocumentObject* obj);
     void sortObjectItems();
     void selectAllInstances(const ViewProviderDocumentObject& vpd);
@@ -564,6 +573,34 @@ private:
 
     friend class TreeWidget;
     friend class DocumentItem;
+};
+
+/** A purely visual folder item in the model tree with no backing document object.
+ * Used to group Sketches, Datums, and Auxiliary objects under a PartDesign Body.
+ * Created and managed by DocumentItem::syncVirtualGroups() via ViewProvider::getAutoGroups().
+ */
+class GuiExport VirtualGroupItem: public QTreeWidgetItem
+{
+public:
+    static const int VirtualGroupType;
+
+    VirtualGroupItem(const QString& label, const QString& iconName, QTreeWidgetItem* parent);
+
+    const QString& groupLabel() const
+    {
+        return _label;
+    }
+    bool isGroupVisible() const
+    {
+        return _visible;
+    }
+    void setGroupVisible(bool v);
+    void updateIcon();
+
+private:
+    QString _label;
+    QString _iconName;
+    bool _visible {true};
 };
 
 class TreePanel: public QWidget

@@ -246,6 +246,28 @@
         </property>
        </widget>
       </item>
+      <item>
+       <widget class="Gui::PrefCheckBox" name="checkShowBodyAutoGroups">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string>Show Sketches/Datums/Auxiliary groups in Body tree</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="prefEntry" stdset="0">
+         <cstring>ShowBodyAutoGroups</cstring>
+        </property>
+        <property name="prefPath" stdset="0">
+         <cstring>Mod/PartDesign</cstring>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

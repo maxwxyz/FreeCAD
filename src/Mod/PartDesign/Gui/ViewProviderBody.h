@@ -25,11 +25,11 @@
 
 #pragma once
 
-#include <Mod/Part/Gui/ViewProvider.h>
-#include <Mod/PartDesign/PartDesignGlobal.h>
-#include <Mod/PartDesign/App/Feature.h>
-#include <Gui/ViewProviderPart.h>
 #include <Gui/ViewProviderOriginGroupExtension.h>
+#include <Gui/ViewProviderPart.h>
+#include <Mod/Part/Gui/ViewProvider.h>
+#include <Mod/PartDesign/App/Feature.h>
+#include <Mod/PartDesign/PartDesignGlobal.h>
 #include <QCoreApplication>
 #include <fastsignals/signal.h>
 
@@ -61,6 +61,8 @@ public:
     App::PropertyEnumeration DisplayModeBody;
 
     void attach(App::DocumentObject*) override;
+
+    std::vector<Gui::ViewProvider::AutoGroupDesc> getAutoGroups() const override;
 
     bool doubleClicked() override;
     void setupContextMenu(QMenu* menu, QObject* receiver, const char* member) override;
