@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PartDesignGui::TaskTranslateParameters</class>
+ <widget class="QWidget" name="PartDesignGui::TaskTranslateParameters">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>300</width>
+    <height>300</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string notr="true">Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <layout class="QHBoxLayout" name="layoutMode">
+     <item>
+      <widget class="QLabel" name="labelMode">
+       <property name="text">
+        <string>Mode</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="comboMode">
+       <property name="toolTip">
+        <string>Select the translation mode</string>
+       </property>
+       <item>
+        <property name="text">
+         <string>Direction + Distance</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Point to Point</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Coordinates</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QStackedWidget" name="stackedWidget">
+     <!-- Page 0: Direction + Distance -->
+     <widget class="QWidget" name="pageDirectionDistance">
+      <layout class="QVBoxLayout" name="layoutDD">
+       <item>
+        <widget class="QToolButton" name="buttonDirectionRef">
+         <property name="toolTip">
+          <string>Select an edge, face, or datum to define the translation direction</string>
+         </property>
+         <property name="text">
+          <string>Direction Reference</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="labelDirectionRef">
+         <property name="text">
+          <string>No reference selected</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="labelCustomDir">
+         <property name="text">
+          <string>Custom direction (when no reference):</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="layoutDirX">
+         <item>
+          <widget class="QLabel" name="labelDirX">
+           <property name="text">
+            <string>X</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QDoubleSpinBox" name="spinDirX">
+           <property name="decimals">
+            <number>6</number>
+           </property>
+           <property name="minimum">
+            <double>-1.000000000000000</double>
+           </property>
+           <property name="maximum">
+            <double>1.000000000000000</double>
+           </property>
+           <property name="singleStep">
+            <double>0.100000000000000</double>
+           </property>
+           <property name="value">
+            <double>0.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="layoutDirY">
+         <item>
+          <widget class="QLabel" name="labelDirY">
+           <property name="text">
+            <string>Y</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QDoubleSpinBox" name="spinDirY">
+           <property name="decimals">
+            <number>6</number>
+           </property>
+           <property name="minimum">
+            <double>-1.000000000000000</double>
+           </property>
+           <property name="maximum">
+            <double>1.000000000000000</double>
+           </property>
+           <property name="singleStep">
+            <double>0.100000000000000</double>
+           </property>
+           <property name="value">
+            <double>0.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="layoutDirZ">
+         <item>
+          <widget class="QLabel" name="labelDirZ">
+           <property name="text">
+            <string>Z</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QDoubleSpinBox" name="spinDirZ">
+           <property name="decimals">
+            <number>6</number>
+           </property>
+           <property name="minimum">
+            <double>-1.000000000000000</double>
+           </property>
+           <property name="maximum">
+            <double>1.000000000000000</double>
+           </property>
+           <property name="singleStep">
+            <double>0.100000000000000</double>
+           </property>
+           <property name="value">
+            <double>1.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="layoutDistance">
+         <item>
+          <widget class="QLabel" name="labelDistance">
+           <property name="text">
+            <string>Distance</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="Gui::QuantitySpinBox" name="spinDistance">
+           <property name="toolTip">
+            <string>Distance to translate along the direction</string>
+           </property>
+           <property name="keyboardTracking">
+            <bool>false</bool>
+           </property>
+           <property name="unit" stdset="0">
+            <string notr="true">mm</string>
+           </property>
+           <property name="minimum">
+            <double>-1e+308</double>
+           </property>
+           <property name="value">
+            <double>10.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+     <!-- Page 1: Point to Point -->
+     <widget class="QWidget" name="pagePointToPoint">
+      <layout class="QVBoxLayout" name="layoutPTP">
+       <item>
+        <widget class="QToolButton" name="buttonStartPoint">
+         <property name="toolTip">
+          <string>Select the start vertex for the translation</string>
+         </property>
+         <property name="text">
+          <string>Start Point</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="labelStartPoint">
+         <property name="text">
+          <string>No start point selected</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="buttonEndPoint">
+         <property name="toolTip">
+          <string>Select the end vertex for the translation</string>
+         </property>
+         <property name="text">
+          <string>End Point</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="labelEndPoint">
+         <property name="text">
+          <string>No end point selected</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <!-- Page 2: Coordinates -->
+     <widget class="QWidget" name="pageCoordinates">
+      <layout class="QVBoxLayout" name="layoutCoord">
+       <item>
+        <layout class="QHBoxLayout" name="layoutDX">
+         <item>
+          <widget class="QLabel" name="labelDX">
+           <property name="text">
+            <string>DX</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="Gui::QuantitySpinBox" name="spinDX">
+           <property name="keyboardTracking">
+            <bool>false</bool>
+           </property>
+           <property name="unit" stdset="0">
+            <string notr="true">mm</string>
+           </property>
+           <property name="minimum">
+            <double>-1e+308</double>
+           </property>
+           <property name="value">
+            <double>0.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="layoutDY">
+         <item>
+          <widget class="QLabel" name="labelDY">
+           <property name="text">
+            <string>DY</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="Gui::QuantitySpinBox" name="spinDY">
+           <property name="keyboardTracking">
+            <bool>false</bool>
+           </property>
+           <property name="unit" stdset="0">
+            <string notr="true">mm</string>
+           </property>
+           <property name="minimum">
+            <double>-1e+308</double>
+           </property>
+           <property name="value">
+            <double>0.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="layoutDZ">
+         <item>
+          <widget class="QLabel" name="labelDZ">
+           <property name="text">
+            <string>DZ</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="Gui::QuantitySpinBox" name="spinDZ">
+           <property name="keyboardTracking">
+            <bool>false</bool>
+           </property>
+           <property name="unit" stdset="0">
+            <string notr="true">mm</string>
+           </property>
+           <property name="minimum">
+            <double>-1e+308</double>
+           </property>
+           <property name="value">
+            <double>0.000000000000000</double>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="layoutAxisSystem">
+         <item>
+          <widget class="QLabel" name="labelAxisSystem">
+           <property name="text">
+            <string>Axis System</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="buttonAxisSystem">
+           <property name="toolTip">
+            <string>Select a coordinate system; leave unset to use the body origin</string>
+           </property>
+           <property name="text">
+            <string>Select Axis System</string>
+           </property>
+           <property name="checkable">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QLabel" name="labelAxisSystemRef">
+         <property name="text">
+          <string>Body origin (default)</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>Gui::QuantitySpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>Gui/QuantitySpinBox.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

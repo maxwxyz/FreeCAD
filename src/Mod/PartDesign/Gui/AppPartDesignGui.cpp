@@ -62,6 +62,7 @@
 #include "ViewProviderSketchBased.h"
 #include "ViewProviderThickness.h"
 #include "ViewProviderTransformed.h"
+#include "ViewProviderTranslate.h"
 
 
 // use a different name to CreateCommand()
@@ -146,6 +147,7 @@ PyMOD_INIT_FUNC(PartDesignGui)
     PartDesignGui::ViewProviderLinearPattern ::init();
     PartDesignGui::ViewProviderPolarPattern  ::init();
     PartDesignGui::ViewProviderScaled        ::init();
+    PartDesignGui::ViewProviderTranslate     ::init();
     PartDesignGui::ViewProviderMultiTransform::init();
     PartDesignGui::ViewProviderDatum         ::init();
     PartDesignGui::ViewProviderDatumPoint    ::init();

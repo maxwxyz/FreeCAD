@@ -55,6 +55,7 @@
 #include <Mod/PartDesign/App/DatumPlane.h>
 #include <Mod/PartDesign/App/DatumPoint.h>
 #include <Mod/PartDesign/App/FeatureDressUp.h>
+#include <Mod/PartDesign/App/FeatureTranslate.h>
 #include <Mod/PartDesign/App/ShapeBinder.h>
 
 #include "DlgActiveBody.h"
@@ -2567,6 +2568,55 @@ bool CmdPartDesignMultiTransform::isActive()
 }
 
 //===========================================================================
+// PartDesign_Translate
+//===========================================================================
+DEF_STD_CMD_A(CmdPartDesignTranslate)
+
+CmdPartDesignTranslate::CmdPartDesignTranslate()
+    : Command("PartDesign_Translate")
+{
+    sAppModule = "PartDesign";
+    sGroup = QT_TR_NOOP("PartDesign");
+    sMenuText = QT_TR_NOOP("Translate");
+    sToolTipText = QT_TR_NOOP(
+        "Parametrically translates the selected features or the active body by a chosen "
+        "direction and distance, between two points, or by explicit coordinates"
+    );
+    sWhatsThis = "PartDesign_Translate";
+    sStatusTip = sToolTipText;
+    sPixmap = "PartDesign_Translate";
+}
+
+void CmdPartDesignTranslate::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+
+    PartDesign::Body* pcActiveBody = PartDesignGui::getBody(true);
+    if (!pcActiveBody) {
+        return;
+    }
+
+    std::string FeatName = getUniqueObjectName("Translate", pcActiveBody);
+    openCommand(QT_TRANSLATE_NOOP("Command", "Make Translate"));
+    FCMD_OBJ_CMD(pcActiveBody, "newObject('PartDesign::Translate','" << FeatName << "')");
+    updateActive();
+
+    App::DocumentObject* Feat = pcActiveBody->getDocument()->getObject(FeatName.c_str());
+    if (!Feat) {
+        abortCommand();
+        return;
+    }
+    FCMD_OBJ_CMD(pcActiveBody, "Tip = " << getObjectCmd(Feat));
+
+    finishFeature(this, Feat);
+}
+
+bool CmdPartDesignTranslate::isActive()
+{
+    return hasActiveDocument();
+}
+
+//===========================================================================
 // PartDesign_Boolean
 //===========================================================================
 
@@ -2745,6 +2795,7 @@ void CreatePartDesignCommands()
     rcCmdMgr.addCommand(new CmdPartDesignPolarPattern());
     // rcCmdMgr.addCommand(new CmdPartDesignScaled());
     rcCmdMgr.addCommand(new CmdPartDesignMultiTransform());
+    rcCmdMgr.addCommand(new CmdPartDesignTranslate());
 
     rcCmdMgr.addCommand(new CmdPartDesignBoolean());
     rcCmdMgr.addCommand(new CmdPartDesignCompDatums());
