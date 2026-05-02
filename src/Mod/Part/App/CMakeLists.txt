@@ -246,6 +246,8 @@ SET(Features_SRCS
 SOURCE_GROUP("Features" FILES ${Features_SRCS})
 
 SET(Properties_SRCS
+    PropertyDressUp.cpp
+    PropertyDressUp.h
     PropertyTopoShape.cpp
     PropertyTopoShape.h
     PropertyGeometryList.cpp

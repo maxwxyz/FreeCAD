@@ -55,6 +55,8 @@ Fillet::Fillet()
     ADD_PROPERTY_TYPE(Radius, (1.0), "Fillet", App::Prop_None, "Fillet radius.");
     Radius.setUnit(Base::Unit::Length);
     Radius.setConstraints(&floatRadius);
+    ADD_PROPERTY(Segments, ());
+    Segments.connectLinkProperty(Base);
     ADD_PROPERTY_TYPE(
         UseAllEdges,
         (false),
@@ -68,7 +70,7 @@ Fillet::Fillet()
 
 short Fillet::mustExecute() const
 {
-    if (Placement.isTouched() || Radius.isTouched()) {
+    if (Placement.isTouched() || Radius.isTouched() || Segments.isTouched()) {
         return 1;
     }
     return DressUp::mustExecute();
@@ -116,7 +118,20 @@ App::DocumentObjectExecReturn* Fillet::execute()
         Base::SignalException se;
 #endif
 
-        shape.makeElementFillet(baseShape, edges, Radius.getValue(), Radius.getValue());
+        std::vector<Part::TopoShape::FilletSegments> segmentList;
+        segmentList.reserve(edges.size());
+        for (const auto& e : edges) {
+            int index = baseShape.findShape(e.getShape());
+            segmentList.emplace_back();
+            if (index > 0) {
+                std::string sub = "Edge" + std::to_string(index);
+                for (const auto& seg : Segments.getValue(sub)) {
+                    segmentList.back().emplace_back(seg.param, seg.radius, seg.length);
+                }
+            }
+        }
+
+        shape.makeElementFillet(baseShape, edges, segmentList, Radius.getValue());
         if (shape.isNull()) {
             return new App::DocumentObjectExecReturn(
                 QT_TRANSLATE_NOOP("Exception", "Resulting shape is null")

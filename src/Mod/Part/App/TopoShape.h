@@ -2291,6 +2291,45 @@ public:
         return TopoShape(0, Hasher).makeElementFillet(*this, edges, radius1, radius2, op);
     }
 
+    struct FilletSegment
+    {
+        double param;
+        double radius;
+        double length;
+        FilletSegment(double t, double r, double l = 0.0)
+            : param(t)
+            , radius(r)
+            , length(l)
+        {}
+        bool operator==(const FilletSegment& other) const
+        {
+            return param == other.param && radius == other.radius && length == other.length;
+        }
+        bool operator<(const FilletSegment& other) const
+        {
+            return param < other.param;
+        }
+    };
+    typedef std::vector<FilletSegment> FilletSegments;
+
+    TopoShape& makeElementFillet(
+        const TopoShape& source,
+        const std::vector<TopoShape>& edges,
+        const std::vector<FilletSegments>& segments,
+        double defaultRadius = 0.0,
+        const char* op = nullptr
+    );
+
+    TopoShape makeElementFillet(
+        const std::vector<TopoShape>& edges,
+        const std::vector<FilletSegments>& segments,
+        double defaultRadius = 0.0,
+        const char* op = nullptr
+    ) const
+    {
+        return TopoShape(0, Hasher).makeElementFillet(*this, edges, segments, defaultRadius, op);
+    }
+
     /* Make chamfer shape
      *
      * @param source: the source shape

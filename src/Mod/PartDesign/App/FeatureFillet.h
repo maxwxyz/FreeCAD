@@ -27,6 +27,7 @@
 
 #include <App/PropertyStandard.h>
 #include <App/PropertyUnits.h>
+#include <Mod/Part/App/PropertyDressUp.h>
 #include "FeatureDressUp.h"
 
 namespace PartDesign
@@ -40,6 +41,7 @@ public:
     Fillet();
 
     App::PropertyQuantityConstraint Radius;
+    Part::PropertyFilletSegments Segments;
     App::PropertyBool UseAllEdges;
 
     /** @name methods override feature */

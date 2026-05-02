@@ -80,6 +80,10 @@
 #include <ShapeFix_Shape.hxx>
 #include <ShapeFix_ShapeTolerance.hxx>
 #include <gp_Pln.hxx>
+#include <gp_Pnt2d.hxx>
+#include <BRepGProp.hxx>
+#include <GProp_GProps.hxx>
+#include <TColgp_Array1OfPnt2d.hxx>
 
 #include <boost/algorithm/string/predicate.hpp>
 
@@ -4109,6 +4113,94 @@ TopoShape& TopoShape::makeElementFillet(
         }
         mkFillet.Add(radius1, radius2, TopoDS::Edge(edge));
     }
+    return makeElementShape(mkFillet, shape, op);
+}
+
+TopoShape& TopoShape::makeElementFillet(
+    const TopoShape& shape,
+    const std::vector<TopoShape>& edges,
+    const std::vector<FilletSegments>& segments,
+    double defaultRadius,
+    const char* op
+)
+{
+    if (!op) {
+        op = Part::OpCodes::Fillet;
+    }
+    if (shape.isNull()) {
+        FC_THROWM(NullShapeException, "Null shape");
+    }
+    if (edges.empty()) {
+        FC_THROWM(NullShapeException, "Null input shape");
+    }
+
+    BRepFilletAPI_MakeFillet mkFillet(shape.getShape());
+
+    for (std::size_t i = 0; i < edges.size(); ++i) {
+        if (edges[i].isNull()) {
+            FC_THROWM(NullShapeException, "Null input shape");
+        }
+        const auto& edge = edges[i].getShape();
+        if (!shape.findShape(edge)) {
+            FC_THROWM(Base::CADKernelError, "edge does not belong to the shape");
+        }
+
+        FilletSegments edgeSegs = (i < segments.size()) ? segments[i] : FilletSegments {};
+
+        if (edgeSegs.empty()) {
+            if (defaultRadius <= 0.0) {
+                FC_THROWM(Base::CADKernelError, "no radius setting for fillet edge");
+            }
+            edgeSegs.emplace_back(0.0, defaultRadius);
+        }
+
+        // Convert length-based positions to parameter-based
+        double length = -1.0;
+        for (auto& seg : edgeSegs) {
+            if (seg.length <= 0.0) {
+                continue;
+            }
+            if (length < 0.0) {
+                GProp_GProps props;
+                BRepGProp::LinearProperties(edge, props);
+                length = props.Mass();
+            }
+            seg.param = (length > seg.length) ? seg.length / length : 1.0;
+        }
+
+        std::stable_sort(edgeSegs.begin(), edgeSegs.end());
+
+        // A segment with both param==0 and radius==0 means suppress this edge
+        if (edgeSegs.front().param == 0.0 && edgeSegs.front().radius == 0.0) {
+            continue;
+        }
+
+        // Build the (param, radius) control point array
+        std::size_t count = edgeSegs.size();
+        if (edgeSegs.front().param > Precision::Confusion()) {
+            ++count;  // need an endpoint at param=0
+        }
+        if (1.0 - edgeSegs.back().param > Precision::Confusion()) {
+            ++count;  // need an endpoint at param=1
+        }
+
+        TColgp_Array1OfPnt2d UandR(1, static_cast<int>(count));
+        int j = 1;
+        if (edgeSegs.front().param > Precision::Confusion()) {
+            double r0 = (defaultRadius > 0.0) ? defaultRadius : edgeSegs.front().radius;
+            UandR.SetValue(j++, gp_Pnt2d(0.0, r0));
+        }
+        for (const auto& seg : edgeSegs) {
+            double t = std::max(0.0, std::min(1.0, seg.param));
+            UandR.SetValue(j++, gp_Pnt2d(t, seg.radius));
+        }
+        if (1.0 - edgeSegs.back().param > Precision::Confusion()) {
+            UandR.SetValue(j++, gp_Pnt2d(1.0, edgeSegs.back().radius));
+        }
+
+        mkFillet.Add(UandR, TopoDS::Edge(edge));
+    }
+
     return makeElementShape(mkFillet, shape, op);
 }
 

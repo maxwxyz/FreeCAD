@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>232</width>
-    <height>181</height>
+    <width>439</width>
+    <height>320</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,51 +15,185 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QToolButton" name="buttonRefSel">
-     <property name="toolTip">
-      <string>Toggles between selection and preview mode</string>
-     </property>
-     <property name="text">
-      <string>Select</string>
-     </property>
-     <property name="checkable">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <widget class="QListWidget" name="listWidgetReferences">
-     <property name="toolTip">
-      <string>- select an item to highlight it
-- double-click on an item to see the fillets</string>
-     </property>
-     <property name="selectionMode">
-      <enum>QAbstractItemView::ExtendedSelection</enum>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_2">
+    <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
-      <widget class="QLabel" name="label">
+      <widget class="QToolButton" name="buttonRefSel">
+       <property name="toolTip">
+        <string>Toggle reference selection mode.
+
+In selection mode you can add or remove edges by clicking
+them in the 3D view.</string>
+       </property>
        <property name="text">
-        <string>Radius</string>
+        <string>Select</string>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="Gui::QuantitySpinBox" name="filletRadius">
-       <property name="keyboardTracking">
-        <bool>false</bool>
+      <widget class="QPushButton" name="btnClear">
+       <property name="maximumSize">
+        <size>
+         <width>100</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Remove all variable-radius segments from the selected edge</string>
+       </property>
+       <property name="text">
+        <string>Clear</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnAdd">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>30</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Add a new radius segment for the selected edge</string>
+       </property>
+       <property name="text">
+        <string>+</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnRemove">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>30</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>30</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Remove the selected segments</string>
+       </property>
+       <property name="text">
+        <string>-</string>
        </property>
       </widget>
      </item>
     </layout>
    </item>
    <item>
+    <widget class="QTreeWidget" name="treeWidgetReferences">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>150</height>
+      </size>
+     </property>
+     <property name="toolTip">
+      <string>Click &apos;+&apos; to add a variable-radius segment for the selected edge.
+Use Parameter (0.0 to 1.0) as a ratio along the edge to specify where the
+radius morphs. Or use Length for an absolute distance along the edge.</string>
+     </property>
+     <property name="selectionMode">
+      <enum>QAbstractItemView::ExtendedSelection</enum>
+     </property>
+     <attribute name="headerVisible">
+      <bool>true</bool>
+     </attribute>
+     <column>
+      <property name="text">
+       <string>Element</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Radius</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Parameter</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Length</string>
+      </property>
+     </column>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <item>
+      <widget class="QLabel" name="label">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>Default Radius:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="Gui::QuantitySpinBox" name="filletRadius" native="true">
+       <property name="minimumSize">
+        <size>
+         <width>80</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="keyboardTracking" stdset="0">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
     <widget class="QCheckBox" name="checkBoxUseAllEdges">
      <property name="text">
-      <string>Use all edges</string>
+      <string>Use All Edges</string>
      </property>
     </widget>
    </item>
@@ -74,7 +208,7 @@
  </customwidgets>
  <tabstops>
   <tabstop>buttonRefSel</tabstop>
-  <tabstop>listWidgetReferences</tabstop>
+  <tabstop>treeWidgetReferences</tabstop>
   <tabstop>filletRadius</tabstop>
   <tabstop>checkBoxUseAllEdges</tabstop>
  </tabstops>

@@ -25,21 +25,47 @@
 
 #pragma once
 
+#include <QItemDelegate>
+#include <QModelIndex>
+#include <QTreeWidgetItem>
+
 #include <Gui/Inventor/Draggers/Gizmo.h>
 
 #include "TaskDressUpParameters.h"
 #include "ViewProviderFillet.h"
 
 class Ui_TaskFilletParameters;
+class QTreeWidget;
+class QTreeWidgetItem;
 
 namespace Gui
 {
+class ExpressionBinding;
 class LinearGizmo;
 class GizmoContainer;
 }  // namespace Gui
 
 namespace PartDesignGui
 {
+
+class FilletSegmentDelegate: public QItemDelegate
+{
+    Q_OBJECT
+
+public:
+    explicit FilletSegmentDelegate(QObject* parent = nullptr);
+
+    QWidget* createEditor(
+        QWidget* parent,
+        const QStyleOptionViewItem& option,
+        const QModelIndex& index
+    ) const override;
+
+    void setEditorData(QWidget* editor, const QModelIndex& index) const override;
+
+    void setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const override;
+};
+
 
 class TaskFilletParameters: public TaskDressUpParameters
 {
@@ -50,6 +76,7 @@ public:
     ~TaskFilletParameters() override;
 
     void apply() override;
+    void setBinding(Gui::ExpressionBinding* binding, const QModelIndex& index);
 
 private Q_SLOTS:
     void onLengthChanged(double);
@@ -58,12 +85,24 @@ private Q_SLOTS:
     void onCheckBoxUseAllEdgesToggled(bool checked);
 
 protected:
-    double getLength() const;
     void setButtons(const selectionModes mode) override;
     void changeEvent(QEvent* e) override;
     void onSelectionChanged(const Gui::SelectionChanges& msg) override;
 
+    void refresh();
+    void newSegment(int editColumn = 0);
+    void clearSegments();
+    void removeSegments();
+    void updateSegments(QTreeWidgetItem* edgeItem);
+    void updateSegment(QTreeWidgetItem* item, int column);
+    void setSegment(QTreeWidgetItem* item, double param, double radius, double length = 0.0);
+    double getRadius() const;
+
+    friend class FilletSegmentDelegate;
+
 private:
+    void referenceSelectedTree(const Gui::SelectionChanges& msg);
+
     std::unique_ptr<Ui_TaskFilletParameters> ui;
 
     std::unique_ptr<Gui::GizmoContainer> gizmoContainer;
