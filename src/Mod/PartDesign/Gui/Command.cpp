@@ -2137,6 +2137,58 @@ bool CmdPartDesignThickness::isActive()
 }
 
 //===========================================================================
+// PartDesign_RotateBody
+//===========================================================================
+
+DEF_STD_CMD_A(CmdPartDesignRotateBody)
+
+CmdPartDesignRotateBody::CmdPartDesignRotateBody()
+    : Command("PartDesign_RotateBody")
+{
+    sAppModule = "PartDesign";
+    sGroup = QT_TR_NOOP("PartDesign");
+    sMenuText = QT_TR_NOOP("Rotate Body");
+    sToolTipText = QT_TR_NOOP("Rotates the body shape around an axis by a given angle");
+    sWhatsThis = "PartDesign_RotateBody";
+    sStatusTip = sToolTipText;
+    sPixmap = "PartDesign_RotateBody";
+}
+
+void CmdPartDesignRotateBody::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+    PartDesign::Body* pcActiveBody = PartDesignGui::getBody(/*messageIfNot=*/true);
+    if (!pcActiveBody) {
+        return;
+    }
+
+    auto* base = dynamic_cast<Part::Feature*>(pcActiveBody->Tip.getValue());
+    if (!base) {
+        QMessageBox::warning(
+            Gui::getMainWindow(),
+            QObject::tr("No solid"),
+            QObject::tr("The body has no solid feature to rotate.")
+        );
+        return;
+    }
+
+    std::string FeatName = getUniqueObjectName("RotateBody", pcActiveBody);
+
+    openCommand(QT_TRANSLATE_NOOP("Command", "Make RotateBody"));
+    FCMD_OBJ_CMD(pcActiveBody, "newObject('PartDesign::RotateBody','" << FeatName << "')");
+    auto* Feat = base->getDocument()->getObject(FeatName.c_str());
+    FCMD_OBJ_CMD(Feat, "BaseFeature = " << getObjectCmd(base));
+    updateActive();
+
+    PartDesignGui::setEdit(Feat, pcActiveBody);
+}
+
+bool CmdPartDesignRotateBody::isActive()
+{
+    return hasActiveDocument() && !Gui::Control().activeDialog();
+}
+
+//===========================================================================
 // Common functions for all Transformed features
 //===========================================================================
 
@@ -2739,6 +2791,7 @@ void CreatePartDesignCommands()
     rcCmdMgr.addCommand(new CmdPartDesignDraft());
     rcCmdMgr.addCommand(new CmdPartDesignChamfer());
     rcCmdMgr.addCommand(new CmdPartDesignThickness());
+    rcCmdMgr.addCommand(new CmdPartDesignRotateBody());
 
     rcCmdMgr.addCommand(new CmdPartDesignMirrored());
     rcCmdMgr.addCommand(new CmdPartDesignLinearPattern());

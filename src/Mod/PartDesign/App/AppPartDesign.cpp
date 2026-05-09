@@ -55,6 +55,7 @@
 #include "FeatureScaled.h"
 #include "FeatureSketchBased.h"
 #include "FeatureSolid.h"
+#include "FeatureRotateBody.h"
 #include "FeatureThickness.h"
 #include "FeatureTransformed.h"
 #include "ShapeBinder.h"
@@ -116,6 +117,7 @@ PyMOD_INIT_FUNC(_PartDesign)
     PartDesign::Chamfer                     ::init();
     PartDesign::Draft                       ::init();
     PartDesign::Thickness                   ::init();
+    PartDesign::RotateBody                  ::init();
     PartDesign::Pipe                        ::init();
     PartDesign::AdditivePipe                ::init();
     PartDesign::SubtractivePipe             ::init();

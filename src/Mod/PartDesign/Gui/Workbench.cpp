@@ -533,7 +533,8 @@ Gui::MenuItem* Workbench::setupMenuBar() const
     *dressups << "PartDesign_Fillet"
               << "PartDesign_Chamfer"
               << "PartDesign_Draft"
-              << "PartDesign_Thickness";
+              << "PartDesign_Thickness"
+              << "PartDesign_RotateBody";
 
     *part << "PartDesign_Body"
           << "Separator"
@@ -616,7 +617,8 @@ Gui::ToolBarItem* Workbench::setupToolBars() const
     *part << "PartDesign_Fillet"
           << "PartDesign_Chamfer"
           << "PartDesign_Draft"
-          << "PartDesign_Thickness";
+          << "PartDesign_Thickness"
+          << "PartDesign_RotateBody";
 
     part = new Gui::ToolBarItem(root);
     part->setCommand("Part Design Transformation Features");

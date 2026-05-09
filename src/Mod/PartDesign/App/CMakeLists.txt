@@ -72,6 +72,12 @@ SET(FeaturesDressUp_SRCS
 )
 SOURCE_GROUP("DressUpFeatures" FILES ${FeaturesDressUp_SRCS})
 
+SET(FeaturesRotateBody_SRCS
+    FeatureRotateBody.h
+    FeatureRotateBody.cpp
+)
+SOURCE_GROUP("FeaturesRotateBody" FILES ${FeaturesRotateBody_SRCS})
+
 SET(FeaturesSketchBased_SRCS
     FeatureExtrude.cpp
     FeatureExtrude.h
@@ -131,6 +137,7 @@ SET(PartDesign_SRCS
     ${FeaturesTransformed_SRCS}
     ${FeaturesSketchBased_SRCS}
     ${FeaturesDressUp_SRCS}
+    ${FeaturesRotateBody_SRCS}
     ${Module_SRCS}
     ${Python_SRCS}
 )

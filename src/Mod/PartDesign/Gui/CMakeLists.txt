@@ -29,6 +29,7 @@ set(PartDesignGui_UIC_SRCS
     TaskFilletParameters.ui
     TaskDraftParameters.ui
     TaskThicknessParameters.ui
+    TaskRotateBodyParameters.ui
     TaskBooleanParameters.ui
     TaskHoleParameters.ui
     TaskRevolutionParameters.ui
@@ -71,6 +72,8 @@ SET(PartDesignGuiViewProvider_SRCS
     ViewProviderFillet.h
     ViewProviderDraft.cpp
     ViewProviderDraft.h
+    ViewProviderRotateBody.cpp
+    ViewProviderRotateBody.h
     ViewProviderThickness.cpp
     ViewProviderThickness.h
     ViewProviderDressUp.cpp
@@ -147,6 +150,9 @@ SET(PartDesignGuiTaskDlgs_SRCS
     TaskThicknessParameters.ui
     TaskThicknessParameters.cpp
     TaskThicknessParameters.h
+    TaskRotateBodyParameters.ui
+    TaskRotateBodyParameters.cpp
+    TaskRotateBodyParameters.h
     TaskDressUpParameters.cpp
     TaskDressUpParameters.h
     TaskRevolutionParameters.ui
