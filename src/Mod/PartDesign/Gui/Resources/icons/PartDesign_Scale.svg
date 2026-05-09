@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  SPDX-License-Identifier: LGPL-2.1-or-later
+  PartDesign Scale feature icon
+-->
+<svg
+   xmlns="http://www.w3.org/2000/svg"
+   width="64px"
+   height="64px"
+   viewBox="0 0 64 64"
+   version="1.1">
+  <defs>
+    <linearGradient id="boxTop" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" style="stop-color:#729fcf;stop-opacity:1"/>
+      <stop offset="1" style="stop-color:#3465a4;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="boxLeft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" style="stop-color:#204a87;stop-opacity:1"/>
+      <stop offset="1" style="stop-color:#3465a4;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="boxRight" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" style="stop-color:#3465a4;stop-opacity:1"/>
+      <stop offset="1" style="stop-color:#204a87;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="bigTop" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" style="stop-color:#fce94f;stop-opacity:1"/>
+      <stop offset="1" style="stop-color:#edd400;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="bigLeft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" style="stop-color:#c4a000;stop-opacity:1"/>
+      <stop offset="1" style="stop-color:#edd400;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="bigRight" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" style="stop-color:#edd400;stop-opacity:1"/>
+      <stop offset="1" style="stop-color:#c4a000;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Large (scaled) box in golden yellow, isometric projection -->
+  <!-- Top face -->
+  <polygon
+     points="32,6 56,18 44,25 20,13"
+     style="fill:url(#bigTop);stroke:#302b00;stroke-width:1.5;stroke-linejoin:round"/>
+  <!-- Left face -->
+  <polygon
+     points="20,13 44,25 44,45 20,33"
+     style="fill:url(#bigLeft);stroke:#302b00;stroke-width:1.5;stroke-linejoin:round"/>
+  <!-- Right face -->
+  <polygon
+     points="44,25 56,18 56,38 44,45"
+     style="fill:url(#bigRight);stroke:#302b00;stroke-width:1.5;stroke-linejoin:round"/>
+
+  <!-- Small (original) box in blue, inset at bottom-left -->
+  <!-- Top face -->
+  <polygon
+     points="10,36 22,42 16,46 4,40"
+     style="fill:url(#boxTop);stroke:#0b1521;stroke-width:1.2;stroke-linejoin:round"/>
+  <!-- Left face -->
+  <polygon
+     points="4,40 16,46 16,56 4,50"
+     style="fill:url(#boxLeft);stroke:#0b1521;stroke-width:1.2;stroke-linejoin:round"/>
+  <!-- Right face -->
+  <polygon
+     points="16,46 22,42 22,52 16,56"
+     style="fill:url(#boxRight);stroke:#0b1521;stroke-width:1.2;stroke-linejoin:round"/>
+
+  <!-- Arrow from small box to large box -->
+  <line x1="22" y1="42" x2="42" y2="27"
+        style="stroke:#ff6600;stroke-width:2;stroke-linecap:round;marker-end:url(#arrowhead)"/>
+  <defs>
+    <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+      <polygon points="0,0 6,3 0,6" style="fill:#ff6600"/>
+    </marker>
+  </defs>
+</svg>

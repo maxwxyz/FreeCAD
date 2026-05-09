@@ -53,6 +53,7 @@
 #include "FeaturePrimitive.h"
 #include "FeatureRevolution.h"
 #include "FeatureScaled.h"
+#include "FeatureScale.h"
 #include "FeatureSketchBased.h"
 #include "FeatureSolid.h"
 #include "FeatureThickness.h"
@@ -103,6 +104,7 @@ PyMOD_INIT_FUNC(_PartDesign)
     PartDesign::LinearPattern               ::init();
     PartDesign::PolarPattern                ::init();
     PartDesign::Scaled                      ::init();
+    PartDesign::Scale                       ::init();
     PartDesign::MultiTransform              ::init();
     PartDesign::Hole                        ::init();
     PartDesign::Body                        ::init();

@@ -2395,6 +2395,51 @@ bool CmdPartDesignPolarPattern::isActive()
 }
 
 //===========================================================================
+// PartDesign_Scale
+//===========================================================================
+DEF_STD_CMD_A(CmdPartDesignScale)
+
+CmdPartDesignScale::CmdPartDesignScale()
+    : Command("PartDesign_Scale")
+{
+    sAppModule = "PartDesign";
+    sGroup = QT_TR_NOOP("PartDesign");
+    sMenuText = QT_TR_NOOP("Scale");
+    sToolTipText = QT_TR_NOOP("Parametrically scale the active body feature");
+    sWhatsThis = "PartDesign_Scale";
+    sStatusTip = sToolTipText;
+    sPixmap = "PartDesign_Scale";
+}
+
+void CmdPartDesignScale::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+
+    PartDesign::Body* pcActiveBody = PartDesignGui::getBody(/* messageIfNot = */ true);
+    if (!pcActiveBody) {
+        return;
+    }
+
+    openCommand(QT_TRANSLATE_NOOP("Command", "Add Scale"));
+    std::string FeatName = getUniqueObjectName("Scale", pcActiveBody);
+    FCMD_OBJ_CMD(pcActiveBody, "newObject('PartDesign::Scale','" << FeatName << "')");
+    updateActive();
+
+    auto Feat = pcActiveBody->getDocument()->getObject(FeatName.c_str());
+    if (Feat) {
+        finishFeature(this, Feat);
+    }
+    else {
+        abortCommand();
+    }
+}
+
+bool CmdPartDesignScale::isActive()
+{
+    return hasActiveDocument();
+}
+
+//===========================================================================
 // PartDesign_Scaled
 //===========================================================================
 DEF_STD_CMD_A(CmdPartDesignScaled)
@@ -2740,6 +2785,7 @@ void CreatePartDesignCommands()
     rcCmdMgr.addCommand(new CmdPartDesignChamfer());
     rcCmdMgr.addCommand(new CmdPartDesignThickness());
 
+    rcCmdMgr.addCommand(new CmdPartDesignScale());
     rcCmdMgr.addCommand(new CmdPartDesignMirrored());
     rcCmdMgr.addCommand(new CmdPartDesignLinearPattern());
     rcCmdMgr.addCommand(new CmdPartDesignPolarPattern());

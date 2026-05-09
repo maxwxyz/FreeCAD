@@ -58,6 +58,7 @@
 #include "ViewProviderPrimitive.h"
 #include "ViewProviderRevolution.h"
 #include "ViewProviderScaled.h"
+#include "ViewProviderScale.h"
 #include "ViewProviderShapeBinder.h"
 #include "ViewProviderSketchBased.h"
 #include "ViewProviderThickness.h"
@@ -146,6 +147,7 @@ PyMOD_INIT_FUNC(PartDesignGui)
     PartDesignGui::ViewProviderLinearPattern ::init();
     PartDesignGui::ViewProviderPolarPattern  ::init();
     PartDesignGui::ViewProviderScaled        ::init();
+    PartDesignGui::ViewProviderScale         ::init();
     PartDesignGui::ViewProviderMultiTransform::init();
     PartDesignGui::ViewProviderDatum         ::init();
     PartDesignGui::ViewProviderDatumPoint    ::init();

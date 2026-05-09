@@ -53,6 +53,8 @@ SET(FeaturesTransformed_SRCS
     FeaturePolarPattern.cpp
     FeatureScaled.h
     FeatureScaled.cpp
+    FeatureScale.h
+    FeatureScale.cpp
     FeatureMultiTransform.h
     FeatureMultiTransform.cpp
 )
