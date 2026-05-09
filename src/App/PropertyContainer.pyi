@@ -30,6 +30,13 @@ class PropertyContainer(Persistence):
         """
         ...
 
+    @constmethod
+    def getPropertyNames(self) -> list:
+        """
+        Returns a list of property names.
+        """
+        ...
+
     def getPropertyTouchList(self, name: str, /) -> tuple:
         """
         Returns a list of index of touched values for list type properties.
