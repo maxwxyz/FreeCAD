@@ -384,7 +384,9 @@ void SoFCSelection::handleEvent(SoHandleEventAction* action)
                             subElementName.getValue().getString(),
                             pp->getPoint()[0],
                             pp->getPoint()[1],
-                            pp->getPoint()[2]
+                            pp->getPoint()[2],
+                            SelectionChanges::MsgSource::Any,
+                            SelectionChanges::PickedPoint::Valid
                         )) {
                         SoFCSelection::turnoffcurrent(action);
                         SoFCSelection::currenthighlight = Gui::toFullPath(action->getCurPath()->copy());
@@ -467,7 +469,10 @@ void SoFCSelection::handleEvent(SoHandleEventAction* action)
                             subElementName.getValue().getString(),
                             pt[0],
                             pt[1],
-                            pt[2]
+                            pt[2],
+                            nullptr,
+                            true,
+                            Gui::SelectionChanges::PickedPoint::Valid
                         );
 
                         if (mymode == OFF) {
@@ -500,7 +505,10 @@ void SoFCSelection::handleEvent(SoHandleEventAction* action)
                             subElementName.getValue().getString(),
                             pt[0],
                             pt[1],
-                            pt[2]
+                            pt[2],
+                            nullptr,
+                            true,
+                            Gui::SelectionChanges::PickedPoint::Valid
                         );
                     }
                     else {
@@ -511,7 +519,10 @@ void SoFCSelection::handleEvent(SoHandleEventAction* action)
                             nullptr,
                             pt[0],
                             pt[1],
-                            pt[2]
+                            pt[2],
+                            nullptr,
+                            true,
+                            Gui::SelectionChanges::PickedPoint::Valid
                         );
                     }
 
