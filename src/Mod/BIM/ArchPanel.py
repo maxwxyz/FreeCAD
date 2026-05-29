@@ -567,19 +567,19 @@ class _Panel(ArchComponent.Component):
                     if not pl.isNull():
                         obj.Placement = pl
 
-    def trimex_axis(self, obj):
-        """Trimex adapter (see draftguitools.gui_trimex._trimex_axis_for).
+    def getTrimexData(self, obj):
+        """Return Trimex data for this Panel, or ``None``.
 
         Trimex on the two faces perpendicular to the panel's Thickness
         (top / bottom) updates ``Thickness`` and shifts ``Placement.Base``
-        along the axis to keep the opposite face anchored. Only the
-        baseless case is supported here, since the in-plane dimensions
-        of a profile-driven panel come from the base sketch, not from
-        ``Length`` / ``Width``.
+        along the axis to keep the opposite face anchored. In-plane
+        dimensions remain controlled by the base/profile or Length/Width.
+
+        Return keys are ``endpoints`` (two world-space end-cap points),
+        ``axes`` (outward vectors used to identify the end faces), and
+        ``set`` (updates Thickness and the axial placement offset).
         """
         try:
-            if getattr(obj, "Base", None):
-                return None
             thickness = float(obj.Thickness.Value)
         except Exception:
             return None
@@ -594,8 +594,24 @@ class _Panel(ArchComponent.Component):
 
         pl = obj.Placement
         axis_world = pl.Rotation.multVec(normal)
-        p1 = FreeCAD.Vector(pl.Base)
-        p2 = p1 + axis_world * thickness
+        if axis_world.Length < 1e-9:
+            return None
+        axis_world.normalize()
+
+        vertices = getattr(getattr(obj, "Shape", None), "Vertexes", [])
+        if not vertices:
+            return None
+        points = [pl.multVec(v.Point) for v in vertices]
+        projections = [p.dot(axis_world) for p in points]
+        min_proj = min(projections)
+        max_proj = max(projections)
+        if max_proj - min_proj < 1e-9:
+            return None
+
+        center = sum(points, FreeCAD.Vector()) * (1.0 / len(points))
+        center_proj = center.dot(axis_world)
+        p1 = center + axis_world * (min_proj - center_proj)
+        p2 = center + axis_world * (max_proj - center_proj)
 
         def _set(pts):
             new_p1 = FreeCAD.Vector(pts[0])

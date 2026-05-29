@@ -1406,8 +1406,8 @@ class _Structure(ArchComponent.Component):
                     )
         return edges
 
-    def trimex_axis(self, obj):
-        """Trimex adapter (see draftguitools.gui_trimex._trimex_axis_for).
+    def getTrimexData(self, obj):
+        """Return Trimex data for this Structure, or ``None``.
 
         Structures (Beam / Column / Slab) extrude a profile along a fixed
         direction by ``Length`` (Beam-mode, length > height) or ``Height``.
@@ -1416,6 +1416,10 @@ class _Structure(ArchComponent.Component):
 
         Skipped when an extrusion ``Tool`` (path) is set — trimming a path
         belongs to that wire, not to the host's scalar properties.
+
+        Return keys are ``endpoints`` (two world-space end-cap points),
+        ``axes`` (outward vectors used to identify the end faces), and
+        ``set`` (updates the scalar extrusion property and placement).
         """
         try:
             if getattr(obj, "Tool", None):

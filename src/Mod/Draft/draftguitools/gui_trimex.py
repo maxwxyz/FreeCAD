@@ -59,82 +59,26 @@ from draftutils.messages import _msg, _err, _toolmsg
 from draftutils.translate import translate
 
 
-def _trimex_axis_for(obj):
-    """Return a Trimex adapter dict for ``obj``, or None.
+def _get_trimex_data(obj):
+    """Return a Trimex data dict for ``obj``, or None.
 
-    The adapter is contributed by ``obj.Proxy.trimex_axis(obj)`` when the
-    proxy implements it (BIM Wall / Pipe / Structure ...). For C++ types
-    without a Python proxy we fall back to a small set of built-in adapters.
-
+    BIM objects opt in by implementing ``obj.Proxy.getTrimexData(obj)``.
     The returned dict must contain ``endpoints`` (two world-space points
-    bounding the object's length / extrusion axis) and ``axes`` (matching
-    outward unit vectors used to identify end faces), plus either:
-        - ``redirect``: an object to operate on instead (e.g. a base wire)
-        - ``set``: callable(list[Vector]) committing new world endpoints
+    bounding the object's editable axis) and ``axes`` (matching outward unit
+    vectors used to identify end faces), plus either:
+
+    - ``redirect``: an object to operate on instead (for example a base wire)
+    - ``set``: callable(list[Vector]) committing new world endpoints
     """
     proxy = getattr(obj, "Proxy", None)
-    if proxy is not None and hasattr(proxy, "trimex_axis"):
+    if proxy is not None and hasattr(proxy, "getTrimexData"):
         try:
-            adapter = proxy.trimex_axis(obj)
+            adapter = proxy.getTrimexData(obj)
         except Exception:
             adapter = None
         if adapter is not None:
             return adapter
-    return _builtin_trimex_axis(obj)
-
-
-def _builtin_trimex_axis(obj):
-    """Built-in adapters for objects without a Python ``trimex_axis``."""
-    try:
-        if obj.isDerivedFrom("Part::Extrusion"):
-            return _part_extrusion_axis(obj)
-    except Exception:
-        pass
     return None
-
-
-def _part_extrusion_axis(obj):
-    """``Part::Extrusion`` adapter: modify ``LengthFwd`` / ``LengthRev``
-    when the user trims one of the two end caps along ``Dir``."""
-    try:
-        dir_local = App.Vector(obj.Dir)
-    except Exception:
-        return None
-    if dir_local.Length < 1e-9:
-        return None
-    pl = obj.Placement
-    dir_world = pl.Rotation.multVec(dir_local).normalize()
-    base = App.Vector(pl.Base)
-    fwd = float(obj.LengthFwd.Value) if hasattr(obj.LengthFwd, "Value") else float(obj.LengthFwd)
-    rev = float(obj.LengthRev.Value) if hasattr(obj.LengthRev, "Value") else float(obj.LengthRev)
-    symmetric = bool(getattr(obj, "Symmetric", False))
-    if symmetric:
-        half = fwd / 2.0
-        p_back = base - dir_world * half
-        p_fwd = base + dir_world * half
-    else:
-        p_back = base - dir_world * rev
-        p_fwd = base + dir_world * fwd
-
-    def _set(pts):
-        new_back = App.Vector(pts[0])
-        new_fwd = App.Vector(pts[1])
-        # Project onto the extrusion direction. Trimex only affects the
-        # axial length: off-axis displacement is ignored on purpose since
-        # changing Dir would alter the shape orientation, not just trim it.
-        new_rev = (base - new_back).dot(dir_world)
-        new_len = (new_fwd - base).dot(dir_world)
-        if symmetric:
-            obj.LengthFwd = max(0.0, new_len + new_rev)
-        else:
-            obj.LengthRev = max(0.0, new_rev)
-            obj.LengthFwd = max(0.0, new_len)
-
-    return {
-        "endpoints": [p_back, p_fwd],
-        "axes": [App.Vector(dir_world).negative(), App.Vector(dir_world)],
-        "set": _set,
-    }
 
 
 class Trimex(gui_base_original.Modifier):
@@ -168,11 +112,10 @@ class Trimex(gui_base_original.Modifier):
         self.linetrack = None
         self.color = None
         self.width = None
-        # Trimex-axis protocol state. Set when an object provides a
-        # ``trimex_axis`` adapter (BIM Wall, Pipe, Structure, Part::Extrusion,
-        # ...): the host is re-selected at the end of the command; either the
+        # Trimex-data protocol state. When a BIM object provides
+        # ``getTrimexData``, the host is re-selected at the end; either the
         # operation is redirected to ``self.obj`` (a base wire), or it commits
-        # via ``trimexSet`` which receives the two updated world endpoints.
+        # through ``trimexSet`` with the two updated world endpoints.
         self.trimexHost = None
         self.trimexSet = None
         self.trimexEndpoints = None
@@ -199,12 +142,10 @@ class Trimex(gui_base_original.Modifier):
 
         import Part
 
-        # BIM / extrusion integration. If the selected object opts into
-        # Trimex via the ``trimex_axis`` protocol (Wall, Pipe, Structure,
-        # Part::Extrusion, ...) and an *end* face is pre-selected, route the
-        # operation to its base wire or to a property-update setter instead
-        # of the default face-extrude path.
-        if self._setupTrimexAxis(sel):
+        # BIM integration. If the selected object opts in via getTrimexData
+        # and an end face is pre-selected, route the operation to its base
+        # wire or to a property-update setter instead of face-extrude.
+        if self._setupTrimexData(sel):
             return
 
         reason = utils.get_trimex_unsupported_reason(self.obj, sel.SubObjects)
@@ -279,13 +220,11 @@ class Trimex(gui_base_original.Modifier):
         self.selection_done = True
         self.update_hints()
 
-    def _setupTrimexAxis(self, sel):
+    def _setupTrimexData(self, sel):
         """Generic adapter dispatch.
 
-        Resolves a ``trimex_axis`` adapter (from ``obj.Proxy.trimex_axis``
-        for BIM objects, or a built-in adapter for C++ types like
-        ``Part::Extrusion``) and, if the user pre-selected an *end* face,
-        routes Trimex to:
+        Resolves BIM ``getTrimexData`` and, if the user pre-selected an end
+        face, routes Trimex to:
           - the redirected base wire/line (``redirect`` key), or
           - a property-update setter (``set`` key) driven by a virtual edge.
 
@@ -295,7 +234,7 @@ class Trimex(gui_base_original.Modifier):
         """
         import Part
 
-        adapter = _trimex_axis_for(self.obj)
+        adapter = _get_trimex_data(self.obj)
         if adapter is None:
             return False
 
@@ -314,6 +253,8 @@ class Trimex(gui_base_original.Modifier):
                 end_idx = match
                 break
         if end_idx is None:
+            # Not an end face (side / top / bottom, or no face picked): keep
+            # the default face-extrude behaviour untouched.
             return False
 
         redirect = adapter.get("redirect")
@@ -321,10 +262,20 @@ class Trimex(gui_base_original.Modifier):
         host = self.obj
 
         if redirect is not None:
-            # Modify the base directly; the host follows on recompute.
+            # Modify the base directly; the host follows on recompute. The
+            # adapter reports two ends (first / last cap), but the wire-mode
+            # vertex list spans every vertex of the base wire, so map the
+            # matched cap to the correct vertex index: 0 -> first, last cap
+            # -> the wire's final vertex (== edge count). Without this a
+            # multi-segment base would move the 2nd vertex instead of the
+            # last when the far end is trimmed.
             self.trimexHost = host
             self.obj = redirect
-            self.lockedActivePoint = end_idx
+            if end_idx == 0:
+                self.lockedActivePoint = 0
+            else:
+                # Last cap -> final vertex; its index equals the edge count.
+                self.lockedActivePoint = self._wireEdgeCount(redirect)
             return False
 
         if setter is None:
@@ -355,6 +306,18 @@ class Trimex(gui_base_original.Modifier):
         self.call = self.view.addEventCallback("SoEvent", self.action)
         _toolmsg(translate("draft", "Pick distance"))
         return True
+
+    @staticmethod
+    def _wireEdgeCount(obj):
+        """Edge count of ``obj``'s wire, using the same edge selection as the
+        wire-mode setup. The final vertex index of the vertex list equals
+        this count."""
+        import Part
+
+        shape = obj.Shape
+        if shape.Wires:
+            return len(Part.__sortEdges__(shape.Wires[0].Edges))
+        return len(shape.Edges)
 
     @staticmethod
     def _matchEndFace(face, ends):
@@ -663,6 +626,18 @@ class Trimex(gui_base_original.Modifier):
                     if self.placement:
                         np = invpl.multVec(np)
                     p.append(np)
+                # When the far endpoint is trimmed, redraw rebuilds the wire
+                # in reverse, which flips the Points order. That is harmless
+                # for a standalone wire but flips direction-sensitive parents
+                # (Arch Truss/Frame, ...) when we trim a redirected base. In
+                # that case keep the original orientation by comparing both
+                # ends against the previous Points.
+                old = self.obj.Points
+                if self.trimexHost is not None and len(p) == len(old) and len(old) >= 2:
+                    same = (p[0] - old[0]).Length + (p[-1] - old[-1]).Length
+                    flipped = (p[0] - old[-1]).Length + (p[-1] - old[0]).Length
+                    if flipped < same:
+                        p.reverse()
                 self.obj.Points = p
             elif utils.getType(self.obj) == "Part::Line":
                 p = []

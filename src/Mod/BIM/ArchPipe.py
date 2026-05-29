@@ -404,35 +404,47 @@ class _ArchPipe(ArchComponent.Component):
                     p = p.cut(p2)
         return p
 
-    def trimex_axis(self, obj):
-        """Trimex adapter (see draftguitools.gui_trimex._trimex_axis_for).
+    def getTrimexData(self, obj):
+        """Return Trimex data for this Pipe, or ``None``.
 
-        Straight pipes expose their two endpoints to Trimex: wire/line-based
+        Straight pipes expose their two end caps to Trimex: wire/line-based
         pipes redirect to the base wire (the pipe follows on recompute);
         baseless pipes update ``Length`` and ``Placement`` so the local +Z
-        axis aligns with the new endpoints.
-        """
-        import Part
-        import Draft
+        axis aligns with the new caps.
 
+        ``OffsetStart`` / ``OffsetEnd`` inset the caps from the raw path
+        ends (see execute), so the exposed endpoints are inset to match;
+        otherwise the cap face would not lie on the endpoint plane and
+        Trimex would not recognise it as an end face.
+
+        Return keys are ``endpoints`` (two world-space end-cap points),
+        ``axes`` (outward vectors used to identify the end faces), and either
+        ``redirect`` (unoffset base wires) or ``set`` (baseless or offset).
+        """
         pipe_pl = obj.Placement
+        off_start = float(obj.OffsetStart.Value) if hasattr(obj, "OffsetStart") else 0.0
+        off_end = float(obj.OffsetEnd.Value) if hasattr(obj, "OffsetEnd") else 0.0
         base = getattr(obj, "Base", None)
         if base is None:
             length = float(obj.Length.Value)
-            p1 = FreeCAD.Vector(pipe_pl.Base)
             axis = pipe_pl.Rotation.multVec(FreeCAD.Vector(0, 0, 1))
-            p2 = p1 + axis * length
+            p1 = pipe_pl.multVec(FreeCAD.Vector(0, 0, off_start))
+            p2 = pipe_pl.multVec(FreeCAD.Vector(0, 0, length - off_end))
 
             def _set(pts):
                 new_p1 = FreeCAD.Vector(pts[0])
                 new_p2 = FreeCAD.Vector(pts[1])
-                new_len = new_p1.distanceToPoint(new_p2)
+                cap_len = new_p1.distanceToPoint(new_p2)
+                new_len = cap_len + off_start + off_end
                 if new_len < 1e-9:
                     return
                 new_dir = new_p2 - new_p1
                 new_dir.normalize()
-                obj.Placement.Base = new_p1
-                obj.Placement.Rotation = FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), new_dir)
+                # The path origin sits OffsetStart before the visible cap.
+                obj.Placement = FreeCAD.Placement(
+                    new_p1 - new_dir * off_start,
+                    FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), new_dir),
+                )
                 obj.Length = new_len
 
             return {
@@ -440,40 +452,12 @@ class _ArchPipe(ArchComponent.Component):
                 "axes": [FreeCAD.Vector(axis).negative(), FreeCAD.Vector(axis)],
                 "set": _set,
             }
-        if Draft.getType(base) not in ("Wire", "Part::Line"):
-            return None
-        shape = getattr(base, "Shape", None)
-        if shape is None or shape.isNull():
-            return None
-        if shape.Wires:
-            edges = Part.__sortEdges__(shape.Wires[0].Edges)
-        else:
-            edges = shape.Edges
-        if not edges:
-            return None
-
-        def _tangent(edge, at_start):
-            try:
-                if at_start:
-                    t = FreeCAD.Vector(edge.tangentAt(edge.FirstParameter)).negative()
-                else:
-                    t = FreeCAD.Vector(edge.tangentAt(edge.LastParameter))
-            except Exception:
-                a = edge.Vertexes[0].Point
-                b = edge.Vertexes[-1].Point
-                t = (b - a) if not at_start else (a - b)
-            if t.Length < 1e-12:
-                return FreeCAD.Vector(1, 0, 0)
-            t.normalize()
-            return pipe_pl.Rotation.multVec(t)
-
-        p_start = pipe_pl.multVec(edges[0].Vertexes[0].Point)
-        p_end = pipe_pl.multVec(edges[-1].Vertexes[-1].Point)
-        return {
-            "endpoints": [p_start, p_end],
-            "axes": [_tangent(edges[0], True), _tangent(edges[-1], False)],
-            "redirect": base,
-        }
+        return ArchComponent.getTrimexDataFromBase(
+            obj,
+            base,
+            offset_start=off_start,
+            offset_end=off_end,
+        )
 
 
 class _ViewProviderPipe(ArchComponent.ViewProviderComponent):

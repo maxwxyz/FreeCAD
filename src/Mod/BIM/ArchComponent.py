@@ -78,6 +78,105 @@ def _make_projected_horizontal_area_face(projected_faces):
     return fused_face.removeSplitter()
 
 
+def getTrimexDataFromBase(obj, base=None, offset_start=0.0, offset_end=0.0):
+    """Return Trimex data for an object controlled by an open base wire.
+
+    The returned dictionary contains:
+
+    ``endpoints``
+        Two world-space points lying on the two editable end-cap planes.
+
+    ``axes``
+        Two outward world-space tangent vectors, one per endpoint.
+
+    ``redirect`` or ``set``
+        With no offsets, Trimex can safely edit the base directly and the
+        dictionary contains ``redirect``. With offsets, the visible cap is
+        inset from the raw base endpoint, so the dictionary contains ``set``;
+        the setter moves the raw base endpoint enough to keep the visible cap
+        under the point placed by the user.
+    """
+    import Part
+
+    if base is None:
+        base = getattr(obj, "Base", None)
+    if base is None or Draft.getType(base) not in ("Wire", "Part::Line"):
+        return None
+    shape = getattr(base, "Shape", None)
+    if shape is None or shape.isNull():
+        return None
+    if shape.Wires:
+        if shape.Wires[0].isClosed():
+            return None
+        edges = Part.__sortEdges__(shape.Wires[0].Edges)
+    else:
+        edges = shape.Edges
+    if not edges:
+        return None
+
+    placement = getattr(obj, "Placement", FreeCAD.Placement())
+    axis_start = _trimex_tangent(edges[0], True, placement)
+    axis_end = _trimex_tangent(edges[-1], False, placement)
+    raw_start = placement.multVec(edges[0].Vertexes[0].Point)
+    raw_end = placement.multVec(edges[-1].Vertexes[-1].Point)
+    p_start = raw_start - axis_start * float(offset_start)
+    p_end = raw_end - axis_end * float(offset_end)
+
+    data = {
+        "endpoints": [p_start, p_end],
+        "axes": [axis_start, axis_end],
+    }
+    if abs(float(offset_start)) < 1e-9 and abs(float(offset_end)) < 1e-9:
+        data["redirect"] = base
+    else:
+        data["set"] = lambda pts: _set_trimex_base_endpoints(
+            base,
+            placement,
+            FreeCAD.Vector(pts[0]) + axis_start * float(offset_start),
+            FreeCAD.Vector(pts[1]) + axis_end * float(offset_end),
+        )
+    return data
+
+
+def _trimex_tangent(edge, at_start, placement):
+    """Outward world-space tangent for the given edge endpoint."""
+    try:
+        if at_start:
+            tangent = FreeCAD.Vector(edge.tangentAt(edge.FirstParameter)).negative()
+        else:
+            tangent = FreeCAD.Vector(edge.tangentAt(edge.LastParameter))
+    except Exception:
+        a = edge.Vertexes[0].Point
+        b = edge.Vertexes[-1].Point
+        tangent = (b - a) if not at_start else (a - b)
+    if tangent.Length < 1e-12:
+        tangent = FreeCAD.Vector(1, 0, 0)
+    else:
+        tangent.normalize()
+    return placement.Rotation.multVec(tangent)
+
+
+def _set_trimex_base_endpoints(base, placement, p_start, p_end):
+    """Set the first and last endpoint of an editable base object."""
+    invpl = placement.inverse()
+    p_start = invpl.multVec(FreeCAD.Vector(p_start))
+    p_end = invpl.multVec(FreeCAD.Vector(p_end))
+    base_type = Draft.getType(base)
+    if base_type == "Part::Line":
+        base.X1 = p_start.x
+        base.Y1 = p_start.y
+        base.Z1 = p_start.z
+        base.X2 = p_end.x
+        base.Y2 = p_end.y
+        base.Z2 = p_end.z
+    elif base_type == "Wire" and hasattr(base, "Points"):
+        points = list(base.Points)
+        if len(points) >= 2:
+            points[0] = p_start
+            points[-1] = p_end
+            base.Points = points
+
+
 def addToComponent(compobject, addobject, prop):
     """Add an object to a component's property.
 
