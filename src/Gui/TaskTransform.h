@@ -34,6 +34,8 @@
 #include <App/Application.h>
 #include <App/Services.h>
 
+#include <QString>
+
 #include <array>
 #include <optional>
 #include <string>
@@ -79,6 +81,12 @@ public:
     {
         std::array<std::string, 3> labels;
         Base::Placement origin;
+    };
+    struct ReferencePlacement
+    {
+        Base::Placement documentPlacement;
+        Base::Placement objectPlacement;
+        QString label;
     };
 
     Q_ENUM(SelectionMode)
@@ -147,6 +155,11 @@ private:
 
     void resetReferencePlacement();
     void resetReferenceRotation();
+    std::optional<ReferencePlacement> referencePlacementFromSelection(
+        const SelectionChanges& msg,
+        bool useSubObjectPlacement,
+        bool useSnapPosition
+    ) const;
     void setCustomCoordinateSystemFromSelection(const SelectionChanges& msg);
 
     ViewProviderDragger::DraggerComponents getRelevantComponents();
