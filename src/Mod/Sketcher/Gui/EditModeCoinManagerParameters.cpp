@@ -82,12 +82,15 @@ SbColor DrawingParameters::FullyConstraintElementColor(
     0.50f,
     0.81f,
     0.62f
-);                                                                       // #80D0A0 -> (128,208,160)
-SbColor DrawingParameters::CurveColor(1.0f, 1.0f, 1.0f);                 // #FFFFFF -> (255,255,255)
-SbColor DrawingParameters::PreselectColor(0.88f, 0.88f, 0.0f);           // #E1E100 -> (225,225,  0)
-SbColor DrawingParameters::SelectColor(0.11f, 0.68f, 0.11f);             // #1CAD1C -> ( 28,173, 28)
-SbColor DrawingParameters::PreselectSelectedColor(0.36f, 0.48f, 0.11f);  // #5D7B1C -> ( 93,123, 28)
-SbColor DrawingParameters::CurveExternalColor(0.8f, 0.2f, 0.6f);         // #CC3399 -> (204, 51,153)
+);                                                        // #80D0A0 -> (128,208,160)
+SbColor DrawingParameters::CurveColor(1.0f, 1.0f, 1.0f);  // #FFFFFF -> (255,255,255)
+SbColor DrawingParameters::PreselectColor(10.0f / 255.0f, 200.0f / 255.0f, 1.0f);  // #0AC8FF -> (
+                                                                                   // 10,200,255)
+SbColor DrawingParameters::SelectColor(0.0f, 171.0f / 255.0f, 1.0f);  // #00ABFF -> (  0,171,255)
+SbColor DrawingParameters::PreselectSelectedColor(5.0f / 255.0f, 186.0f / 255.0f, 1.0f);  // #05BAFF
+                                                                                          // -> (
+                                                                                          // 5,186,255)
+SbColor DrawingParameters::CurveExternalColor(0.8f, 0.2f, 0.6f);  // #CC3399 -> (204, 51,153)
 SbColor DrawingParameters::CurveExternalDefiningColor(0.8f, 0.2f, 0.6f);  // #CC3399 -> (204, 51,153)
 SbColor DrawingParameters::CurveDraftColor(0.0f, 0.0f, 0.86f);  // #0000DC -> (  0,  0,220)
 SbColor DrawingParameters::FullyConstraintConstructionElementColor(
