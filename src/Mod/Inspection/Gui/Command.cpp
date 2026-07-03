@@ -25,15 +25,20 @@
 #include <Inventor/events/SoButtonEvent.h>
 
 
+#include <Base/Console.h>
 #include <App/Document.h>
+#include <App/PropertyLinks.h>
 #include <Gui/Application.h>
 #include <Gui/BitmapFactory.h>
 #include <Gui/Command.h>
 #include <Gui/Document.h>
 #include <Gui/MainWindow.h>
+#include <Gui/Selection/Selection.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/View3DInventorViewer.h>
+#include <Mod/Inspection/App/Analysis.h>
 #include <Mod/Inspection/App/InspectionFeature.h>
+#include <Mod/Part/App/PartFeature.h>
 
 #include "ViewProviderInspection.h"
 #include "VisualInspection.h"
@@ -115,9 +120,134 @@ bool CmdInspectElement::isActive()
     return false;
 }
 
+//--------------------------------------------------------------------------------------
+
+namespace
+{
+
+Part::TopoShape selectedShape(App::DocumentObject* obj)
+{
+    Part::TopoShape shape = Part::Feature::getTopoShape(
+        obj,
+        Part::ShapeOption::ResolveLink | Part::ShapeOption::Transform
+    );
+    if (!shape.isNull()) {
+        return shape;
+    }
+
+    auto* tip = freecad_cast<App::PropertyLink*>(obj->getPropertyByName("Tip"));
+    if (tip && tip->getValue() && tip->getValue() != obj) {
+        return Part::Feature::getTopoShape(
+            tip->getValue(),
+            Part::ShapeOption::ResolveLink | Part::ShapeOption::Transform
+        );
+    }
+
+    return {};
+}
+
+std::vector<App::DocumentObject*> selectedPartObjects()
+{
+    std::vector<App::DocumentObject*> selected = Gui::Selection().getObjectsOfType(
+        App::DocumentObject::getClassTypeId(),
+        nullptr,
+        Gui::ResolveMode::FollowLink
+    );
+
+    std::vector<App::DocumentObject*> result;
+    result.reserve(selected.size());
+    for (auto* obj : selected) {
+        if (!selectedShape(obj).isNull()) {
+            result.push_back(obj);
+        }
+    }
+    return result;
+}
+
+}  // namespace
+
+DEF_STD_CMD_A(CmdBandAnalysis)
+
+CmdBandAnalysis::CmdBandAnalysis()
+    : Command("Inspection_BandAnalysis")
+{
+    sAppModule = "Inspection";
+    sGroup = QT_TR_NOOP("Inspection");
+    sMenuText = QT_TR_NOOP("Band Analysis");
+    sToolTipText = QT_TR_NOOP("Computes and visualizes distance bands between two selected shapes");
+    sWhatsThis = "Inspection_BandAnalysis";
+    sStatusTip = sToolTipText;
+    sPixmap = "Inspection_BandAnalysis";
+}
+
+void CmdBandAnalysis::activated(int)
+{
+    auto objects = selectedPartObjects();
+    if (objects.size() < 2) {
+        Base::Console().warning("Band analysis requires two selected Part objects\n");
+        return;
+    }
+
+    App::Document* doc = App::GetApplication().getActiveDocument();
+    auto* result = freecad_cast<Inspection::BandAnalysis*>(
+        doc->addObject("Inspection::BandAnalysis", "BandAnalysis")
+    );
+    result->Source.setValue(objects[0]);
+    result->Target.setValue(objects[1]);
+    result->MaximumDistance.setValue(1.0);
+    result->Accuracy.setValue(0.1);
+    result->Label.setValue("Band Analysis");
+    doc->recompute();
+}
+
+bool CmdBandAnalysis::isActive()
+{
+    return App::GetApplication().getActiveDocument();
+}
+
+//--------------------------------------------------------------------------------------
+
+DEF_STD_CMD_A(CmdInterferenceAnalysis)
+
+CmdInterferenceAnalysis::CmdInterferenceAnalysis()
+    : Command("Inspection_InterferenceAnalysis")
+{
+    sAppModule = "Inspection";
+    sGroup = QT_TR_NOOP("Inspection");
+    sMenuText = QT_TR_NOOP("Interference Analysis");
+    sToolTipText = QT_TR_NOOP("Checks selected shapes for clashes, contacts, and clearances");
+    sWhatsThis = "Inspection_InterferenceAnalysis";
+    sStatusTip = sToolTipText;
+    sPixmap = "Inspection_InterferenceAnalysis";
+}
+
+void CmdInterferenceAnalysis::activated(int)
+{
+    auto objects = selectedPartObjects();
+    if (objects.size() < 2) {
+        Base::Console().warning("Interference analysis requires at least two selected Part objects\n");
+        return;
+    }
+
+    App::Document* doc = App::GetApplication().getActiveDocument();
+    auto* result = freecad_cast<Inspection::InterferenceAnalysis*>(
+        doc->addObject("Inspection::InterferenceAnalysis", "InterferenceAnalysis")
+    );
+    result->GroupA.setValues(objects);
+    result->Label.setValue("Interference Analysis");
+    doc->recompute();
+}
+
+bool CmdInterferenceAnalysis::isActive()
+{
+    return App::GetApplication().getActiveDocument();
+}
+
 void CreateInspectionCommands()
 {
     Gui::CommandManager& rcCmdMgr = Gui::Application::Instance->commandManager();
     rcCmdMgr.addCommand(new CmdVisualInspection());
     rcCmdMgr.addCommand(new CmdInspectElement());
+    rcCmdMgr.addCommand(new CmdBandAnalysis());
+    rcCmdMgr.addCommand(new CmdInterferenceAnalysis());
 }

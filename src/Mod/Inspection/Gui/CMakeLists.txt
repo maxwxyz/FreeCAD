@@ -2,6 +2,7 @@
 
 set(InspectionGui_LIBS
     Inspection
+    PartGui
     FreeCADGui
 )
 
@@ -24,6 +25,8 @@ SET(InspectionGui_SRCS
     AppInspectionGui.cpp
     Command.cpp
     PreCompiled.h
+    ViewProviderAnalysis.cpp
+    ViewProviderAnalysis.h
     ViewProviderInspection.cpp
     ViewProviderInspection.h
     Workbench.cpp

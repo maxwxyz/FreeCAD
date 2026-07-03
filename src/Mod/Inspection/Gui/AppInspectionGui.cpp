@@ -28,6 +28,7 @@
 #include <Base/PyObjectBase.h>
 #include <Gui/Application.h>
 
+#include "ViewProviderAnalysis.h"
 #include "ViewProviderInspection.h"
 #include "Workbench.h"
 
@@ -69,6 +70,7 @@ PyMOD_INIT_FUNC(InspectionGui)
     // instantiating the commands
     // clang-format off
     CreateInspectionCommands();
+    InspectionGui::ViewProviderAnalysis          ::init();
     InspectionGui::ViewProviderInspection       ::init();
     InspectionGui::ViewProviderInspectionGroup  ::init();
     InspectionGui::Workbench                    ::init();

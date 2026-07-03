@@ -8,6 +8,8 @@ set(Inspection_LIBS
 )
 
 SET(Inspection_SRCS
+    Analysis.cpp
+    Analysis.h
     AppInspection.cpp
     InspectionFeature.cpp
     InspectionFeature.h

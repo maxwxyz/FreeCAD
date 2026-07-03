@@ -26,6 +26,7 @@
 #include <Base/Console.h>
 #include <Base/PyObjectBase.h>
 
+#include "Analysis.h"
 #include "InspectionFeature.h"
 
 
@@ -61,6 +62,9 @@ PyMOD_INIT_FUNC(Inspection)
     Base::Console().log("Loading Inspection module… done\n");
     // clang-format off
     Inspection::PropertyDistanceList    ::init();
+    Inspection::AnalysisFeature         ::init();
+    Inspection::BandAnalysis            ::init();
+    Inspection::InterferenceAnalysis    ::init();
     Inspection::Feature                 ::init();
     Inspection::Group                   ::init();
     // clang-format on

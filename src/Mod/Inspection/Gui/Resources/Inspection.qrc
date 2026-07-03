@@ -1,6 +1,9 @@
 <RCC>
     <qresource>
         <file>icons/inspect_pipette.svg</file>
+        <file>icons/Inspection_Analysis.svg</file>
+        <file>icons/Inspection_BandAnalysis.svg</file>
+        <file>icons/Inspection_InterferenceAnalysis.svg</file>
         <file>icons/InspectionWorkbench.svg</file>
         <file>translations/Inspection_fr.qm</file>
         <file>translations/Inspection_hu.qm</file>
