@@ -24,6 +24,8 @@ SET(InspectionGui_SRCS
     AppInspectionGui.cpp
     Command.cpp
     PreCompiled.h
+    ViewProviderCompare.cpp
+    ViewProviderCompare.h
     ViewProviderInspection.cpp
     ViewProviderInspection.h
     Workbench.cpp

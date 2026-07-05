@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>inspection_compare</title>
+  <path d="M7 12h24v24H7z" fill="#204a87" stroke="#0b152a" stroke-width="3"/>
+  <path d="M33 28h24v24H33z" fill="#4e9a06" stroke="#173f00" stroke-width="3"/>
+  <path d="M21 24h22v22H21z" fill="#cc0000" fill-opacity=".78" stroke="#5c0000" stroke-width="3"/>
+  <path d="M10 15h18v18H10z" fill="#729fcf" fill-opacity=".55"/>
+  <path d="M36 31h18v18H36z" fill="#8ae234" fill-opacity=".45"/>
+  <path d="M24 27h16v16H24z" fill="#ef2929" fill-opacity=".65"/>
+</svg>

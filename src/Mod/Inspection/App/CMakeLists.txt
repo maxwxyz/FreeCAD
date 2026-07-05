@@ -9,6 +9,8 @@ set(Inspection_LIBS
 
 SET(Inspection_SRCS
     AppInspection.cpp
+    CompareFeature.cpp
+    CompareFeature.h
     InspectionFeature.cpp
     InspectionFeature.h
     PreCompiled.h

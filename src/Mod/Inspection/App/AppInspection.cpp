@@ -26,6 +26,7 @@
 #include <Base/Console.h>
 #include <Base/PyObjectBase.h>
 
+#include "CompareFeature.h"
 #include "InspectionFeature.h"
 
 
@@ -60,6 +61,7 @@ PyMOD_INIT_FUNC(Inspection)
     PyObject* mod = Inspection::initModule();
     Base::Console().log("Loading Inspection module… done\n");
     // clang-format off
+    Inspection::Compare                 ::init();
     Inspection::PropertyDistanceList    ::init();
     Inspection::Feature                 ::init();
     Inspection::Group                   ::init();
