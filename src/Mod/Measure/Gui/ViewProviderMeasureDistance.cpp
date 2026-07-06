@@ -55,6 +55,7 @@
 #include <Base/BaseClass.h>
 #include <Base/Console.h>
 #include <Base/Quantity.h>
+#include <Mod/Measure/App/MeasureDistance.h>
 #include <Mod/Measure/App/Preferences.h>
 
 #include "ViewProviderMeasureDistance.h"
@@ -67,6 +68,30 @@
 using namespace Gui;
 using namespace MeasureGui;
 using namespace Measure;
+
+namespace
+{
+bool isDirectionProjected(App::DocumentObject* object, Base::Vector3d& direction)
+{
+    auto* projectionMode = freecad_cast<App::PropertyEnumeration*>(
+        object->getPropertyByName("ProjectionMode")
+    );
+    if (!projectionMode || !projectionMode->isValue("Direction")) {
+        return false;
+    }
+
+    if (auto* distance = freecad_cast<Measure::MeasureDistance*>(object)) {
+        direction = distance->getProjectionDirection();
+        return true;
+    }
+    if (auto* detached = freecad_cast<Measure::MeasureDistanceDetached*>(object)) {
+        direction = detached->getProjectionDirection();
+        return true;
+    }
+
+    return false;
+}
+}  // namespace
 
 PROPERTY_SOURCE(MeasureGui::ViewProviderMeasureDistance, MeasureGui::ViewProviderMeasureBase)
 
@@ -245,8 +270,18 @@ SbMatrix ViewProviderMeasureDistance::getMatrix()
     auto vec2 = prop2->getValue();
 
     const double tolerance(10.0e-6);
+    Base::Vector3d localXAxis = vec2 - vec1;
+    Base::Vector3d projectionDirection;
+    if (isDirectionProjected(pcObject, projectionDirection)) {
+        const double projectedDistance = localXAxis.Dot(projectionDirection);
+        vec2 = vec1 + projectionDirection * projectedDistance;
+        localXAxis = projectionDirection;
+    }
+    else {
+        localXAxis.Normalize();
+    }
+
     SbVec3f origin = toSbVec3f((vec2 + vec1) / 2);
-    Base::Vector3d localXAxis = (vec2 - vec1).Normalize();
     Base::Vector3d localYAxis = getTextDirection(localXAxis, tolerance).Normalize();
 
     // X and Y axis have to be 90° to each other
@@ -475,14 +510,23 @@ void ViewProviderMeasureDistance::redrawAnnotation()
     auto vec1 = prop1->getValue();
     auto vec2 = prop2->getValue();
 
+    Base::Vector3d projectionDirection;
+    if (isDirectionProjected(pcObject, projectionDirection)) {
+        const Base::Vector3d delta = vec2 - vec1;
+        vec2 = vec1 + projectionDirection * delta.Dot(projectionDirection);
+    }
+
     fieldPosition1.setValue(SbVec3f(vec1.x, vec1.y, vec1.z));
     fieldPosition2.setValue(SbVec3f(vec2.x, vec2.y, vec2.z));
 
     // Set the distance
     fieldDistance = (vec2 - vec1).Length();
 
-    auto propDistance = dynamic_cast<App::PropertyDistance*>(pcObject->getPropertyByName("Distance"));
-    setLabelValue(propDistance->getQuantityValue().getUserString());
+    auto measureObject = getMeasureObject();
+    if (!measureObject) {
+        return;
+    }
+    setLabelValue(measureObject->getResultString());
 
     // Set delta distance
     auto propDistanceX = static_cast<App::PropertyDistance*>(

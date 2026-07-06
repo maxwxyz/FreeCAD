@@ -26,6 +26,7 @@
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/MeasureManager.h>
+#include <Base/Precision.h>
 #include <Base/Tools.h>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_CompCurve.hxx>
@@ -35,10 +36,101 @@
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Wire.hxx>
 
+#include <cmath>
+#include <cstring>
+
+#include <Mod/Part/App/PartFeature.h>
+
 #include "MeasureDistance.h"
 
 
 using namespace Measure;
+
+namespace
+{
+const char* ProjectionModeEnums[] = {"None", "Direction", nullptr};
+const char* ProjectionDirectionEnums[] = {"X", "Y", "Z", "Custom", nullptr};
+
+Base::Vector3d axisForDirection(
+    const App::PropertyEnumeration& direction,
+    const App::PropertyDirection& customDirection
+)
+{
+    const char* axis = direction.getValueAsString();
+    if (strcmp(axis, "X") == 0) {
+        return Base::Vector3d::UnitX;
+    }
+    if (strcmp(axis, "Y") == 0) {
+        return Base::Vector3d::UnitY;
+    }
+    if (strcmp(axis, "Z") == 0) {
+        return Base::Vector3d::UnitZ;
+    }
+
+    Base::Vector3d custom = customDirection.getValue();
+    if (custom.Length() <= Base::Vector3d::epsilon()) {
+        return Base::Vector3d::UnitX;
+    }
+
+    return custom.Normalize();
+}
+
+bool hasDirectionProjection(const App::PropertyEnumeration& projectionMode)
+{
+    return strcmp(projectionMode.getValueAsString(), "Direction") == 0;
+}
+
+bool hasCustomProjectionDirection(const App::PropertyEnumeration& projectionDirection)
+{
+    return strcmp(projectionDirection.getValueAsString(), "Custom") == 0;
+}
+
+bool referenceDirection(App::DocumentObject* obj, const char* subName, Base::Vector3d& direction)
+{
+    if (!obj || !obj->isValid()) {
+        return false;
+    }
+
+    auto options = Part::ShapeOption::ResolveLink | Part::ShapeOption::Transform;
+    if (subName && subName[0] != '\0') {
+        options |= Part::ShapeOption::NeedSubElement;
+    }
+
+    TopoDS_Shape shape = Part::Feature::getShape(obj, options, subName);
+
+    if (shape.IsNull() || shape.ShapeType() != TopAbs_EDGE) {
+        return false;
+    }
+
+    BRepAdaptor_Curve curve(TopoDS::Edge(shape));
+    if (curve.GetType() != GeomAbs_Line) {
+        return false;
+    }
+
+    const gp_Dir dir = curve.Line().Direction();
+    direction = Base::Vector3d(dir.X(), dir.Y(), dir.Z());
+    return true;
+}
+
+void updateGeneratedLabelPrefix(Measure::MeasureBase& obj, bool projected)
+{
+    std::string label(obj.Label.getValue());
+    const auto pos = label.find(':');
+    std::string prefix = pos == std::string::npos ? label : label.substr(0, pos);
+
+    if (projected && (prefix.empty() || prefix == "Distance")) {
+        prefix = "Projected distance";
+    }
+    else if (!projected && prefix == "Projected distance") {
+        prefix = "Distance";
+    }
+    else {
+        return;
+    }
+
+    obj.Label.setValue((prefix + ": " + obj.getResultString()).c_str());
+}
+}  // namespace
 
 PROPERTY_SOURCE(Measure::MeasureDistance, Measure::MeasureBase)
 
@@ -92,6 +184,41 @@ MeasureDistance::MeasureDistance()
         "Distance in Z-direction"
     );
     DistanceZ.setUnit(Base::Unit::Length);
+
+    ADD_PROPERTY_TYPE(ProjectionMode, (0L), "Projection", App::Prop_None, "How the measurement is projected");
+    ProjectionMode.setEnums(ProjectionModeEnums);
+    ADD_PROPERTY_TYPE(
+        ProjectionDirection,
+        (0L),
+        "Projection",
+        App::Prop_None,
+        "Axis used when projecting the measurement along a direction"
+    );
+    ProjectionDirection.setEnums(ProjectionDirectionEnums);
+    ADD_PROPERTY_TYPE(
+        ProjectionVector,
+        (Base::Vector3d::UnitX),
+        "Projection",
+        App::Prop_None,
+        "Custom direction used when ProjectionDirection is Custom"
+    );
+    ADD_PROPERTY_TYPE(
+        ProjectionReference,
+        (nullptr),
+        "Projection",
+        App::Prop_None,
+        "Linear edge or datum axis used for custom direction projection"
+    );
+    ProjectionReference.setScope(App::LinkScope::Global);
+    ProjectionReference.setAllowExternal(true);
+    ADD_PROPERTY_TYPE(
+        ProjectedDistance,
+        (0.0),
+        "Projection",
+        App::PropertyType(App::Prop_ReadOnly | App::Prop_Output),
+        "Distance projected along the selected direction"
+    );
+    ProjectedDistance.setUnit(Base::Unit::Length);
 
     ADD_PROPERTY_TYPE(
         Position1,
@@ -232,6 +359,74 @@ void MeasureDistance::setValues(const gp_Pnt& p1, const gp_Pnt& p2)
     DistanceX.setValue(std::fabs(delta.X()));
     DistanceY.setValue(std::fabs(delta.Y()));
     DistanceZ.setValue(std::fabs(delta.Z()));
+    updateProjectedDistance(Base::Vector3d(delta.X(), delta.Y(), delta.Z()));
+}
+
+Base::Vector3d MeasureDistance::getProjectionDirection() const
+{
+    return axisForDirection(ProjectionDirection, ProjectionVector);
+}
+
+void MeasureDistance::updateProjectionDirectionFromReference()
+{
+    if (!hasCustomProjectionDirection(ProjectionDirection)) {
+        return;
+    }
+
+    App::DocumentObject* refObj = ProjectionReference.getValue();
+    std::vector<std::string> refSubs = ProjectionReference.getSubValues();
+    const char* refSub = refSubs.empty() ? nullptr : refSubs.front().c_str();
+
+    Base::Vector3d direction;
+    if (referenceDirection(refObj, refSub, direction)) {
+        direction.Normalize();
+        if (!ProjectionVector.getValue().IsEqual(direction, Base::Precision::Confusion())) {
+            ProjectionVector.setValue(direction);
+        }
+    }
+}
+
+void MeasureDistance::updateProjectedDistance(const Base::Vector3d& delta)
+{
+    if (hasDirectionProjection(ProjectionMode)) {
+        updateProjectionDirectionFromReference();
+        ProjectedDistance.setValue(std::fabs(delta.Dot(getProjectionDirection())));
+        return;
+    }
+
+    ProjectedDistance.setValue(Distance.getValue());
+}
+
+std::string MeasureDistance::getResultString()
+{
+    if (!hasDirectionProjection(ProjectionMode)) {
+        return MeasureBase::getResultString();
+    }
+
+    return formatQuantity(ProjectedDistance.getQuantityValue());
+}
+
+App::Property* MeasureDistance::getResultProp()
+{
+    return hasDirectionProjection(ProjectionMode) ? static_cast<App::Property*>(&ProjectedDistance)
+                                                  : static_cast<App::Property*>(&Distance);
+}
+
+bool MeasureDistance::setProjectionReference(App::DocumentObject* obj, const char* subName)
+{
+    Base::Vector3d direction;
+    if (!referenceDirection(obj, subName, direction)) {
+        return false;
+    }
+
+    const std::vector<std::string> subNames = subName && subName[0] != '\0'
+        ? std::vector<std::string> {subName}
+        : std::vector<std::string> {};
+    ProjectionReference.setValue(obj, subNames);
+    ProjectionMode.setValue("Direction");
+    ProjectionDirection.setValue("Custom");
+    ProjectionVector.setValue(direction.Normalize());
+    return true;
 }
 
 App::DocumentObjectExecReturn* MeasureDistance::execute()
@@ -273,10 +468,12 @@ App::DocumentObjectExecReturn* MeasureDistance::execute()
 void MeasureDistance::onChanged(const App::Property* prop)
 {
 
-    if (prop == &Element1 || prop == &Element2) {
+    if (prop == &Element1 || prop == &Element2 || prop == &ProjectionMode
+        || prop == &ProjectionDirection || prop == &ProjectionVector || prop == &ProjectionReference) {
         if (!isRestoring()) {
             App::DocumentObjectExecReturn* ret = recompute();
             delete ret;
+            updateGeneratedLabelPrefix(*this, hasDirectionProjection(ProjectionMode));
         }
     }
     DocumentObject::onChanged(prop);
@@ -367,6 +564,41 @@ MeasureDistanceDetached::MeasureDistanceDetached()
     );
     DistanceZ.setUnit(Base::Unit::Length);
 
+    ADD_PROPERTY_TYPE(ProjectionMode, (0L), "Projection", App::Prop_None, "How the measurement is projected");
+    ProjectionMode.setEnums(ProjectionModeEnums);
+    ADD_PROPERTY_TYPE(
+        ProjectionDirection,
+        (0L),
+        "Projection",
+        App::Prop_None,
+        "Axis used when projecting the measurement along a direction"
+    );
+    ProjectionDirection.setEnums(ProjectionDirectionEnums);
+    ADD_PROPERTY_TYPE(
+        ProjectionVector,
+        (Base::Vector3d::UnitX),
+        "Projection",
+        App::Prop_None,
+        "Custom direction used when ProjectionDirection is Custom"
+    );
+    ADD_PROPERTY_TYPE(
+        ProjectionReference,
+        (nullptr),
+        "Projection",
+        App::Prop_None,
+        "Linear edge or datum axis used for custom direction projection"
+    );
+    ProjectionReference.setScope(App::LinkScope::Global);
+    ProjectionReference.setAllowExternal(true);
+    ADD_PROPERTY_TYPE(
+        ProjectedDistance,
+        (0.0),
+        "Projection",
+        App::PropertyType(App::Prop_ReadOnly | App::Prop_Output),
+        "Distance projected along the selected direction"
+    );
+    ProjectedDistance.setUnit(Base::Unit::Length);
+
     ADD_PROPERTY_TYPE(Position1, (Base::Vector3d(0.0, 0.0, 0.0)), "Measurement", App::Prop_None, "Position1");
     ADD_PROPERTY_TYPE(Position2, (Base::Vector3d(0.0, 1.0, 0.0)), "Measurement", App::Prop_None, "Position2");
 }
@@ -402,6 +634,74 @@ void MeasureDistanceDetached::recalculateDistance()
     DistanceX.setValue(fabs(delta.x));
     DistanceY.setValue(fabs(delta.y));
     DistanceZ.setValue(fabs(delta.z));
+    updateProjectedDistance(delta);
+}
+
+Base::Vector3d MeasureDistanceDetached::getProjectionDirection() const
+{
+    return axisForDirection(ProjectionDirection, ProjectionVector);
+}
+
+void MeasureDistanceDetached::updateProjectionDirectionFromReference()
+{
+    if (!hasCustomProjectionDirection(ProjectionDirection)) {
+        return;
+    }
+
+    App::DocumentObject* refObj = ProjectionReference.getValue();
+    std::vector<std::string> refSubs = ProjectionReference.getSubValues();
+    const char* refSub = refSubs.empty() ? nullptr : refSubs.front().c_str();
+
+    Base::Vector3d direction;
+    if (referenceDirection(refObj, refSub, direction)) {
+        direction.Normalize();
+        if (!ProjectionVector.getValue().IsEqual(direction, Base::Precision::Confusion())) {
+            ProjectionVector.setValue(direction);
+        }
+    }
+}
+
+void MeasureDistanceDetached::updateProjectedDistance(const Base::Vector3d& delta)
+{
+    if (hasDirectionProjection(ProjectionMode)) {
+        updateProjectionDirectionFromReference();
+        ProjectedDistance.setValue(std::fabs(delta.Dot(getProjectionDirection())));
+        return;
+    }
+
+    ProjectedDistance.setValue(Distance.getValue());
+}
+
+std::string MeasureDistanceDetached::getResultString()
+{
+    if (!hasDirectionProjection(ProjectionMode)) {
+        return MeasureBase::getResultString();
+    }
+
+    return formatQuantity(ProjectedDistance.getQuantityValue());
+}
+
+App::Property* MeasureDistanceDetached::getResultProp()
+{
+    return hasDirectionProjection(ProjectionMode) ? static_cast<App::Property*>(&ProjectedDistance)
+                                                  : static_cast<App::Property*>(&Distance);
+}
+
+bool MeasureDistanceDetached::setProjectionReference(App::DocumentObject* obj, const char* subName)
+{
+    Base::Vector3d direction;
+    if (!referenceDirection(obj, subName, direction)) {
+        return false;
+    }
+
+    const std::vector<std::string> subNames = subName && subName[0] != '\0'
+        ? std::vector<std::string> {subName}
+        : std::vector<std::string> {};
+    ProjectionReference.setValue(obj, subNames);
+    ProjectionMode.setValue("Direction");
+    ProjectionDirection.setValue("Custom");
+    ProjectionVector.setValue(direction.Normalize());
+    return true;
 }
 
 void MeasureDistanceDetached::onChanged(const App::Property* prop)
@@ -410,8 +710,10 @@ void MeasureDistanceDetached::onChanged(const App::Property* prop)
         return;
     }
 
-    if (prop == &Position1 || prop == &Position2) {
+    if (prop == &Position1 || prop == &Position2 || prop == &ProjectionMode
+        || prop == &ProjectionDirection || prop == &ProjectionVector || prop == &ProjectionReference) {
         recalculateDistance();
+        updateGeneratedLabelPrefix(*this, hasDirectionProjection(ProjectionMode));
     }
 
     MeasureBase::onChanged(prop);

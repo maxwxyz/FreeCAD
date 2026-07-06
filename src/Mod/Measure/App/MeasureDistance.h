@@ -31,6 +31,7 @@
 
 #include <App/PropertyGeo.h>
 #include <App/PropertyLinks.h>
+#include <App/PropertyStandard.h>
 #include <App/PropertyUnits.h>
 
 #include <Mod/Part/App/MeasureInfo.h>
@@ -71,6 +72,11 @@ public:
     App::PropertyDistance DistanceX;
     App::PropertyDistance DistanceY;
     App::PropertyDistance DistanceZ;
+    App::PropertyEnumeration ProjectionMode;
+    App::PropertyEnumeration ProjectionDirection;
+    App::PropertyDirection ProjectionVector;
+    App::PropertyLinkSub ProjectionReference;
+    App::PropertyDistance ProjectedDistance;
 
     // Position properties for the viewprovider
     App::PropertyVector Position1;
@@ -89,14 +95,21 @@ public:
 
     std::vector<std::string> getInputProps() override
     {
-        return {"Element1", "Element2"};
+        return {
+            "Element1",
+            "Element2",
+            "ProjectionMode",
+            "ProjectionDirection",
+            "ProjectionVector",
+            "ProjectionReference"
+        };
     }
-    App::Property* getResultProp() override
-    {
-        return &this->Distance;
-    }
+    App::Property* getResultProp() override;
+    std::string getResultString() override;
 
     bool getShape(App::PropertyLinkSub* prop, TopoDS_Shape& rShape);
+    Base::Vector3d getProjectionDirection() const;
+    bool setProjectionReference(App::DocumentObject* obj, const char* subName);
 
     // Return the object we are measuring
     std::vector<App::DocumentObject*> getSubject() const override;
@@ -106,6 +119,8 @@ private:
     bool distanceCircleCircle(const TopoDS_Shape& shape1, const TopoDS_Shape& shape2);
     void distanceGeneric(const TopoDS_Shape& shape1, const TopoDS_Shape& shape2);
     void setValues(const gp_Pnt& p1, const gp_Pnt& p2);
+    void updateProjectionDirectionFromReference();
+    void updateProjectedDistance(const Base::Vector3d& delta);
     void onChanged(const App::Property* prop) override;
     Handle(Geom_Circle) asCircle(const TopoDS_Shape& shape) const;
     Handle(Geom_Circle) asCircle(const TopoDS_Edge& edge) const;
@@ -126,6 +141,11 @@ public:
     App::PropertyDistance DistanceX;
     App::PropertyDistance DistanceY;
     App::PropertyDistance DistanceZ;
+    App::PropertyEnumeration ProjectionMode;
+    App::PropertyEnumeration ProjectionDirection;
+    App::PropertyDirection ProjectionVector;
+    App::PropertyLinkSub ProjectionReference;
+    App::PropertyDistance ProjectedDistance;
 
     App::PropertyVector Position1;
     App::PropertyVector Position2;
@@ -143,15 +163,22 @@ public:
 
     std::vector<std::string> getInputProps() override
     {
-        return {"Position1", "Position2"};
+        return {
+            "Position1",
+            "Position2",
+            "ProjectionMode",
+            "ProjectionDirection",
+            "ProjectionVector",
+            "ProjectionReference"
+        };
     }
-    App::Property* getResultProp() override
-    {
-        return &this->Distance;
-    }
+    App::Property* getResultProp() override;
+    std::string getResultString() override;
 
     // Return the object we are measuring
     std::vector<App::DocumentObject*> getSubject() const override;
+    Base::Vector3d getProjectionDirection() const;
+    bool setProjectionReference(App::DocumentObject* obj, const char* subName);
 
     void handleChangedPropertyName(
         Base::XMLReader& reader,
@@ -160,6 +187,8 @@ public:
     ) override;
 
 private:
+    void updateProjectionDirectionFromReference();
+    void updateProjectedDistance(const Base::Vector3d& delta);
     void onChanged(const App::Property* prop) override;
 };
 

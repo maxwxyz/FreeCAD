@@ -29,9 +29,11 @@
 #include "TaskMeasure.h"
 
 #include <App/DocumentObjectGroup.h>
+#include <App/GeoFeature.h>
 #include <App/Link.h>
 #include <Mod/Measure/App/MeasureDistance.h>
 #include <App/PropertyStandard.h>
+#include <App/PropertyLinks.h>
 #include <Gui/MainWindow.h>
 #include <Gui/Application.h>
 #include <Gui/BitmapFactory.h>
@@ -52,6 +54,7 @@ using enum Gui::InputHint::UserInput;
 #include <QSignalBlocker>
 
 #include <Base/Quantity.h>
+#include <Base/Console.h>
 #include <Base/UnitsApi.h>
 #include <array>
 
@@ -63,6 +66,8 @@ constexpr auto taskMeasureSettingsGroup = "TaskMeasure";
 constexpr auto taskMeasureShowDeltaSettingsName = "ShowDelta";
 constexpr auto taskMeasureAutoSaveSettingsName = "AutoSave";
 constexpr auto taskMeasureGreedySelection = "GreedySelection";
+constexpr auto projectionNone = "None";
+constexpr auto projectionDirectionMode = "Direction";
 
 using SelectionStyle = Gui::SelectionSingleton::SelectionStyle;
 
@@ -126,6 +131,20 @@ QString preferredUnitForMeasureType(const App::MeasureType* measureType)
     std::string unitString;
     Base::UnitsApi::schemaTranslate(Base::Quantity(1.0, unit), factor, unitString);
     return QString::fromStdString(unitString);
+}
+
+QString shortReferenceName(const App::DocumentObject* obj, const std::string& sub)
+{
+    QString label = QString::fromUtf8(obj->Label.getValue());
+    if (sub.empty()) {
+        return label;
+    }
+
+    App::ElementNamePair elementName;
+    App::GeoFeature::resolveElement(obj, sub.c_str(), elementName, true);
+
+    const auto& shortSubName = elementName.oldName.empty() ? sub : elementName.oldName;
+    return label + QLatin1Char('.') + QString::fromStdString(shortSubName);
 }
 
 }  // namespace
@@ -209,6 +228,37 @@ TaskMeasure::TaskMeasure()
     unitSwitch->addItem(QLatin1String("-"));
     connect(unitSwitch, qOverload<int>(&QComboBox::currentIndexChanged), this, &TaskMeasure::onUnitChanged);
 
+    projectionModeSwitch = new QComboBox();
+    projectionModeSwitch->addItem(tr("None"), QLatin1String(projectionNone));
+    projectionModeSwitch->addItem(tr("Direction"), QLatin1String(projectionDirectionMode));
+    connect(
+        projectionModeSwitch,
+        qOverload<int>(&QComboBox::currentIndexChanged),
+        this,
+        &TaskMeasure::onProjectionModeChanged
+    );
+
+    projectionDirectionSwitch = new QComboBox();
+    projectionDirectionSwitch->addItem(tr("X"), QLatin1String("X"));
+    projectionDirectionSwitch->addItem(tr("Y"), QLatin1String("Y"));
+    projectionDirectionSwitch->addItem(tr("Z"), QLatin1String("Z"));
+    projectionDirectionSwitch->addItem(tr("Custom"), QLatin1String("Custom"));
+    connect(
+        projectionDirectionSwitch,
+        qOverload<int>(&QComboBox::currentIndexChanged),
+        this,
+        &TaskMeasure::onProjectionDirectionChanged
+    );
+
+    projectionReferenceEdit = new QLineEdit();
+    projectionReferenceEdit->setReadOnly(true);
+    projectionReferencePickButton = new QPushButton(tr("Pick"));
+    connect(
+        projectionReferencePickButton,
+        &QPushButton::clicked,
+        this,
+        &TaskMeasure::onPickProjectionReference
+    );
 
     // Result widget
     valueResult = new QLineEdit();
@@ -244,9 +294,21 @@ TaskMeasure::TaskMeasure()
     resultLayout->addWidget(unitSwitch, 30);
     formLayout->addRow(tr("Result"), resultLayout);
     formLayout->addRow(deltaLayout);
+
+    projectionLabel = new QLabel(tr("Projection"));
+    projectionDirectionLabel = new QLabel(tr("Direction"));
+    projectionReferenceLabel = new QLabel(tr("Reference"));
+    formLayout->addRow(projectionLabel, projectionModeSwitch);
+    formLayout->addRow(projectionDirectionLabel, projectionDirectionSwitch);
+    auto* projectionReferenceLayout = new QHBoxLayout();
+    projectionReferenceLayout->setSpacing(8);
+    projectionReferenceLayout->addWidget(projectionReferenceEdit, 1);
+    projectionReferenceLayout->addWidget(projectionReferencePickButton, 0);
+    formLayout->addRow(projectionReferenceLabel, projectionReferenceLayout);
     layout->addLayout(formLayout);
 
     Content.emplace_back(taskbox);
+    syncProjection();
 
     // engage the selectionObserver
 
@@ -400,6 +462,7 @@ void TaskMeasure::tryUpdate()
             setModeSilent(nullptr);
         }
         removeObject();
+        syncProjection();
         enableAnnotateButton(false);
         return;
     }
@@ -423,6 +486,7 @@ void TaskMeasure::tryUpdate()
         // Fill measure object's properties from selection
         _mMeasureObject->parseSelection(selection);
 
+        syncProjection();
         syncDisplayUnit();
         refreshResult();
 
@@ -472,6 +536,64 @@ void TaskMeasure::syncDisplayUnit()
     }
 }
 
+void TaskMeasure::syncProjection()
+{
+    auto setProjectionControlsVisible =
+        [this](bool modeVisible, bool directionVisible, bool referenceVisible) {
+            projectionLabel->setVisible(modeVisible);
+            projectionModeSwitch->setVisible(modeVisible);
+            projectionDirectionLabel->setVisible(directionVisible);
+            projectionDirectionSwitch->setVisible(directionVisible);
+            projectionReferenceLabel->setVisible(referenceVisible);
+            projectionReferenceEdit->setVisible(referenceVisible);
+            projectionReferencePickButton->setVisible(referenceVisible);
+        };
+
+    if (!_mMeasureObject) {
+        setProjectionControlsVisible(false, false, false);
+        updateDeltaControls(showDelta->isVisible());
+        return;
+    }
+
+    auto* projectionMode = freecad_cast<App::PropertyEnumeration*>(
+        _mMeasureObject->getPropertyByName("ProjectionMode")
+    );
+    auto* projectionDirection = freecad_cast<App::PropertyEnumeration*>(
+        _mMeasureObject->getPropertyByName("ProjectionDirection")
+    );
+
+    const bool canProject = projectionMode && projectionDirection;
+    const bool showDirection = canProject
+        && projectionModeSwitch->currentData().toString() == QLatin1String(projectionDirectionMode);
+    const bool showReference = showDirection
+        && projectionDirectionSwitch->currentData().toString() == QLatin1String("Custom");
+    setProjectionControlsVisible(canProject, showDirection, showReference);
+
+    if (!canProject) {
+        return;
+    }
+
+    const std::string mode = projectionModeSwitch->currentData().toString().toStdString();
+    if (!projectionMode->isValue(mode.c_str())) {
+        projectionMode->setValue(mode.c_str());
+    }
+
+    const std::string direction = projectionDirectionSwitch->currentData().toString().toStdString();
+    if (!projectionDirection->isValue(direction.c_str())) {
+        projectionDirection->setValue(direction.c_str());
+    }
+
+    updateProjectionReferenceLabel();
+    updateMeasurementLabel();
+    updateDeltaControls(showDelta->isVisible());
+}
+
+void TaskMeasure::updateProjectionControls()
+{
+    syncProjection();
+    update();
+}
+
 void TaskMeasure::refreshResult()
 {
     if (!_mMeasureObject) {
@@ -502,7 +624,7 @@ void TaskMeasure::initViewObject(Measure::MeasureBase* measure)
     auto* prop = viewObject->getPropertyByName<App::PropertyBool>("ShowDelta");
     setDeltaPossible(prop != nullptr);
     if (prop) {
-        prop->setValue(showDelta->isChecked());
+        prop->setValue(!isProjectionActive() && showDelta->isChecked());
         viewObject->update(prop);
     }
 }
@@ -646,6 +768,17 @@ void TaskMeasure::clearSelection()
 
 void TaskMeasure::onSelectionChanged(const Gui::SelectionChanges& msg)
 {
+    if (mRestoringMeasurementSelection) {
+        return;
+    }
+
+    if (mPickingProjectionReference) {
+        if (msg.Type == Gui::SelectionChanges::AddSelection) {
+            setProjectionReferenceFromSelection(msg);
+        }
+        return;
+    }
+
     // Skip non-relevant events
     if (msg.Type != Gui::SelectionChanges::AddSelection
         && msg.Type != Gui::SelectionChanges::RmvSelection
@@ -671,6 +804,156 @@ void TaskMeasure::onSelectionChanged(const Gui::SelectionChanges& msg)
         }
     }
     update();
+}
+
+void TaskMeasure::setProjectionReferenceFromSelection(const Gui::SelectionChanges& msg)
+{
+    if (!_mMeasureObject) {
+        setProjectionReferencePicking(false);
+        return;
+    }
+
+    const auto* refMsg = msg.pOriginalMsg ? msg.pOriginalMsg : &msg;
+    App::Document* doc = App::GetApplication().getDocument(refMsg->pDocName);
+    App::DocumentObject* obj = doc ? doc->getObject(refMsg->pObjectName) : nullptr;
+
+    bool accepted = false;
+    if (auto* distance = freecad_cast<Measure::MeasureDistance*>(_mMeasureObject)) {
+        accepted = distance->setProjectionReference(obj, refMsg->pSubName);
+    }
+    else if (auto* detached = freecad_cast<Measure::MeasureDistanceDetached*>(_mMeasureObject)) {
+        accepted = detached->setProjectionReference(obj, refMsg->pSubName);
+    }
+
+    if (!accepted) {
+        Base::Console().message(
+            "Measure: select a linear edge or datum axis as custom projection direction\n"
+        );
+        restoreMeasurementSelection();
+        return;
+    }
+
+    {
+        QSignalBlocker blocker(projectionModeSwitch);
+        const int index = projectionModeSwitch->findData(QLatin1String(projectionDirectionMode));
+        if (index >= 0) {
+            projectionModeSwitch->setCurrentIndex(index);
+        }
+    }
+    {
+        QSignalBlocker blocker(projectionDirectionSwitch);
+        const int index = projectionDirectionSwitch->findData(QLatin1String("Custom"));
+        if (index >= 0) {
+            projectionDirectionSwitch->setCurrentIndex(index);
+        }
+    }
+
+    setProjectionReferencePicking(false);
+    restoreMeasurementSelection();
+    syncProjection();
+    syncDisplayUnit();
+    refreshResult();
+    initViewObject(_mMeasureObject);
+}
+
+void TaskMeasure::updateProjectionReferenceLabel()
+{
+    if (!_mMeasureObject || !projectionReferenceEdit) {
+        return;
+    }
+
+    auto* projectionReference = freecad_cast<App::PropertyLinkSub*>(
+        _mMeasureObject->getPropertyByName("ProjectionReference")
+    );
+    if (!projectionReference || !projectionReference->getValue()) {
+        projectionReferenceEdit->clear();
+        return;
+    }
+
+    QString label = QString::fromUtf8(projectionReference->getValue()->Label.getValue());
+    const auto subs = projectionReference->getSubValues();
+    if (!subs.empty()) {
+        label = shortReferenceName(projectionReference->getValue(), subs.front());
+    }
+    projectionReferenceEdit->setText(label);
+}
+
+void TaskMeasure::updateMeasurementLabel()
+{
+    if (!_mMeasureObject) {
+        return;
+    }
+
+    auto* projectionMode = freecad_cast<App::PropertyEnumeration*>(
+        _mMeasureObject->getPropertyByName("ProjectionMode")
+    );
+    const bool projected = projectionMode && projectionMode->isValue(projectionDirectionMode);
+
+    std::string label(_mMeasureObject->Label.getValue());
+    const auto pos = label.find(':');
+    std::string prefix = pos == std::string::npos ? label : label.substr(0, pos);
+    const std::string projectedPrefix = tr("Projected distance").toStdString();
+    const std::string distancePrefix = tr("Distance").toStdString();
+    if (projected && (prefix.empty() || prefix == distancePrefix)) {
+        prefix = tr("Projected distance").toStdString();
+    }
+    else if (!projected && prefix == projectedPrefix) {
+        prefix = tr("Distance").toStdString();
+    }
+    else {
+        return;
+    }
+
+    _mMeasureObject->Label.setValue((prefix + ": ") + _mMeasureObject->getResultString());
+}
+
+void TaskMeasure::storeCurrentMeasurementSelection()
+{
+    mMeasurementSelection.clear();
+    App::Document* doc = App::GetApplication().getActiveDocument();
+    if (!doc) {
+        return;
+    }
+
+    for (auto sel : Gui::Selection().getSelection(doc->getName(), Gui::ResolveMode::NoResolve)) {
+        mMeasurementSelection.push_back({sel.DocName, sel.FeatName, sel.SubName, sel.x, sel.y, sel.z});
+    }
+}
+
+void TaskMeasure::restoreMeasurementSelection()
+{
+    mRestoringMeasurementSelection = true;
+    Gui::Selection().clearSelection();
+    for (const auto& sel : mMeasurementSelection) {
+        Gui::Selection().addSelection(
+            sel.docName.c_str(),
+            sel.objectName.c_str(),
+            sel.subName.c_str(),
+            sel.x,
+            sel.y,
+            sel.z
+        );
+    }
+    mRestoringMeasurementSelection = false;
+}
+
+void TaskMeasure::setProjectionReferencePicking(bool picking)
+{
+    if (picking == mPickingProjectionReference) {
+        return;
+    }
+
+    mPickingProjectionReference = picking;
+    if (picking) {
+        storeCurrentMeasurementSelection();
+        projectionReferenceEdit->setText(tr("Select edge or axis…"));
+        projectionReferencePickButton->setText(tr("Cancel"));
+        Gui::Selection().clearSelection();
+        return;
+    }
+
+    projectionReferencePickButton->setText(tr("Pick"));
+    updateProjectionReferenceLabel();
 }
 
 void TaskMeasure::setupShortcuts(QWidget* parent)
@@ -714,8 +997,32 @@ void TaskMeasure::onObjectDeleted(const App::DocumentObject& obj)
 
 void TaskMeasure::setDeltaPossible(bool possible)
 {
+    updateDeltaControls(possible);
+}
+
+void TaskMeasure::updateDeltaControls(bool possible)
+{
     showDelta->setVisible(possible);
     showDeltaLabel->setVisible(possible);
+
+    const bool projectionActive = isProjectionActive();
+    showDelta->setEnabled(possible && !projectionActive);
+    showDeltaLabel->setEnabled(possible && !projectionActive);
+
+    QSignalBlocker blocker(showDelta);
+    showDelta->setChecked(projectionActive ? false : delta);
+}
+
+bool TaskMeasure::isProjectionActive() const
+{
+    if (!_mMeasureObject) {
+        return false;
+    }
+
+    auto* projectionMode = freecad_cast<App::PropertyEnumeration*>(
+        _mMeasureObject->getPropertyByName("ProjectionMode")
+    );
+    return projectionMode && projectionMode->isValue(projectionDirectionMode);
 }
 
 void TaskMeasure::onModeChanged(int index)
@@ -732,8 +1039,37 @@ void TaskMeasure::onUnitChanged(int index)
     refreshResult();
 }
 
+void TaskMeasure::onProjectionModeChanged(int index)
+{
+    Q_UNUSED(index);
+    updateProjectionControls();
+}
+
+void TaskMeasure::onProjectionDirectionChanged(int index)
+{
+    Q_UNUSED(index);
+    updateProjectionControls();
+}
+
+void TaskMeasure::onPickProjectionReference()
+{
+    if (mPickingProjectionReference) {
+        setProjectionReferencePicking(false);
+        restoreMeasurementSelection();
+        update();
+        return;
+    }
+
+    setProjectionReferencePicking(true);
+}
+
 void TaskMeasure::showDeltaChanged(int checkState)
 {
+    if (isProjectionActive()) {
+        updateDeltaControls(showDelta->isVisible());
+        return;
+    }
+
     delta = checkState == Qt::CheckState::Checked;
 
     QSettings settings;

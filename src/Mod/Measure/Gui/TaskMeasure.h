@@ -28,6 +28,7 @@
 #include <QComboBox>
 #include <QLineEdit>
 #include <QCheckBox>
+#include <QPushButton>
 
 #include <App/Application.h>
 #include <App/Document.h>
@@ -43,6 +44,9 @@
 #include <Gui/Selection/Selection.h>
 
 #include <fastsignals/connection.h>
+
+#include <string>
+#include <vector>
 
 namespace MeasureGui
 {
@@ -88,6 +92,13 @@ private:
     QLineEdit* valueResult {nullptr};
     QComboBox* modeSwitch {nullptr};
     QComboBox* unitSwitch {nullptr};
+    QComboBox* projectionModeSwitch {nullptr};
+    QComboBox* projectionDirectionSwitch {nullptr};
+    QLineEdit* projectionReferenceEdit {nullptr};
+    QPushButton* projectionReferencePickButton {nullptr};
+    QLabel* projectionLabel {nullptr};
+    QLabel* projectionDirectionLabel {nullptr};
+    QLabel* projectionReferenceLabel {nullptr};
     QCheckBox* showDelta {nullptr};
     QLabel* showDeltaLabel {nullptr};
     QAction* autoSaveAction {nullptr};
@@ -99,6 +110,9 @@ private:
     void removeObject();
     void onModeChanged(int index);
     void onUnitChanged(int index);
+    void onProjectionModeChanged(int index);
+    void onProjectionDirectionChanged(int index);
+    void onPickProjectionReference();
     void showDeltaChanged(int checkState);
     void autoSaveChanged(bool checked);
     void newMeasurementBehaviourChanged(bool checked);
@@ -109,12 +123,35 @@ private:
     void createObject(const App::MeasureType* measureType);
     void ensureGroup(Measure::MeasureBase* measurement);
     void setDeltaPossible(bool possible);
+    void updateDeltaControls(bool possible);
+    bool isProjectionActive() const;
     void initViewObject(Measure::MeasureBase* measure);
     void syncDisplayUnit();
+    void syncProjection();
+    void updateProjectionControls();
+    void setProjectionReferenceFromSelection(const Gui::SelectionChanges& msg);
+    void updateProjectionReferenceLabel();
+    void updateMeasurementLabel();
+    void storeCurrentMeasurementSelection();
+    void restoreMeasurementSelection();
+    void setProjectionReferencePicking(bool picking);
     void refreshResult();
+
+    struct SelectionSnapshot
+    {
+        std::string docName;
+        std::string objectName;
+        std::string subName;
+        float x {0.0F};
+        float y {0.0F};
+        float z {0.0F};
+    };
 
     // Stores if the mode is explicitly set by the user or implicitly through the selection
     bool explicitMode = false;
+    bool mPickingProjectionReference = false;
+    bool mRestoringMeasurementSelection = false;
+    std::vector<SelectionSnapshot> mMeasurementSelection;
 
     // Stores if delta measures shall be shown
     bool delta = true;
