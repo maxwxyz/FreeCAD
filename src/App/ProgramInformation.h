@@ -80,6 +80,7 @@ private:
         std::stringstream& str);
     static void getPackageInformation(std::stringstream& str);
     static void getLibraryVersions(std::stringstream& str);
+    static void getAdditionalVersionInformation(std::stringstream& str);
     static void getIfcInfo(std::stringstream& str);
     static void getLocale(std::stringstream& str);
 

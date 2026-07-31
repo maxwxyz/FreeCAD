@@ -267,6 +267,7 @@ SET(FemSolver_SRCS
     femsolver/solver_taskpanel.py
     femsolver/solverbase.py
     femsolver/task.py
+    femsolver/version_info.py
     femsolver/writerbase.py
 )
 

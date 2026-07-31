@@ -169,6 +169,7 @@ void ProgramInformation::getVerboseCommonInfo(
     getPackageInformation(str);
     getBuildInformation(mConfig, str);
     getLibraryVersions(str);
+    getAdditionalVersionInformation(str);
     getLocale(str);
 }
 
@@ -297,6 +298,36 @@ void ProgramInformation::getLibraryVersions(std::stringstream& str)
 #if defined(OCC_VERSION_STRING_EXT)
     str << "OCC " << OCC_VERSION_STRING_EXT << '\n';
 #endif
+}
+
+void ProgramInformation::getAdditionalVersionInformation(std::stringstream& str)
+{
+    try {
+        Base::PyGILStateLocker lock;
+        Py::Module module(PyImport_ImportModule("FreeCAD"), true);
+        if (!module.hasAttr("__additional_version_info__")) {
+            return;
+        }
+        Py::List providers(module.getAttr("__additional_version_info__"));
+        for (Py::List::iterator it = providers.begin(); it != providers.end(); ++it) {
+            try {
+                Py::Callable provider(*it);
+                std::string info = Py::String(provider.apply(Py::Tuple())).as_std_string();
+                if (!info.empty()) {
+                    str << info << '\n';
+                }
+            }
+            catch (const Py::Exception&) {
+                Base::PyException e;
+                e.reportException();
+            }
+        }
+    }
+    catch (const Py::Exception&) {
+        Base::PyGILStateLocker lock;
+        Base::PyException e;
+        e.reportException();
+    }
 }
 
 void ProgramInformation::getIfcInfo(std::stringstream& str)

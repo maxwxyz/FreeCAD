@@ -46,6 +46,7 @@ import FreeCAD
 
 # needed imports
 from femtools.migrate_app import FemMigrateApp
+from femsolver.version_info import get_solver_versions
 
 translate = FreeCAD.Qt.translate
 
@@ -55,6 +56,9 @@ sys.meta_path.append(FemMigrateApp())
 
 # add FEM App unit tests
 FreeCAD.__unit_test__ += ["TestFemApp"]
+
+# Include versions of the available FEM solvers in FreeCAD's About information.
+FreeCAD.__additional_version_info__.append(get_solver_versions)
 
 
 # add import and export file types

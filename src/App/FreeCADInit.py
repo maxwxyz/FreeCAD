@@ -420,6 +420,9 @@ App.__cmake__ = globals().get("cmake", [])
 # store unit test names
 App.__unit_test__ = []
 
+# Additional version information providers registered by individual modules.
+App.__additional_version_info__ = []
+
 App.addImportType("FreeCAD document (*.FCStd)", "FreeCAD")
 
 # set to no gui, is overwritten by InitGui
