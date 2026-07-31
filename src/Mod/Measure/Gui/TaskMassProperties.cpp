@@ -30,6 +30,8 @@
 #include <QTimer>
 
 #include <QtWidgets>
+#include <algorithm>
+#include <cctype>
 #include <unordered_set>
 #include <sstream>
 #include <tuple>
@@ -197,6 +199,31 @@ static int getUnitsSchemaIndex(int comboIndex, int preferredSchemaIndex)
     }
 }
 
+static bool isFaceSelection(const char* subName)
+{
+    if (!subName || !subName[0]) {
+        return false;
+    }
+
+    std::string elementName(subName);
+    const std::size_t separator = elementName.rfind('.');
+    if (separator != std::string::npos) {
+        elementName.erase(0, separator + 1);
+    }
+
+    constexpr char facePrefix[] = "Face";
+    if (elementName.compare(0, sizeof(facePrefix) - 1, facePrefix) != 0
+        || elementName.size() == sizeof(facePrefix) - 1) {
+        return false;
+    }
+
+    return std::all_of(
+        elementName.begin() + sizeof(facePrefix) - 1,
+        elementName.end(),
+        [](unsigned char character) { return std::isdigit(character); }
+    );
+}
+
 TaskMassProperties::TaskMassProperties()
     : Gui::SelectionObserver(true, Gui::ResolveMode::NoResolve)
     , panel(new TaskMassPropertiesWidget)
@@ -275,18 +302,29 @@ TaskMassProperties::TaskMassProperties()
         auto* layout = box->groupLayout();
         layout->addWidget(page);
         Content.emplace_back(box);
+        return box;
     };
 
     addTaskBox("MassPropertiesIcon", tr("Parameters"), panel->takePage(panel->ui.parametersPage));
-    addTaskBox(
+    physicalPropertiesBox = addTaskBox(
         "MassPropertiesIcon",
         tr("Physical Properties"),
         panel->takePage(panel->ui.physicalPropertiesPage)
     );
-    addTaskBox("COG-Icon", tr("Center of Gravity"), panel->takePage(panel->ui.centerOfGravityPage));
-    addTaskBox("COV-Icon", tr("Center of Volume"), panel->takePage(panel->ui.centerOfVolumePage));
-    addTaskBox("Std_CoordinateSystem", tr("Inertia"), panel->takePage(panel->ui.inertiaPage));
+    centerOfGravityBox = addTaskBox(
+        "COG-Icon",
+        tr("Center of Gravity"),
+        panel->takePage(panel->ui.centerOfGravityPage)
+    );
+    centerOfVolumeBox = addTaskBox(
+        "COV-Icon",
+        tr("Center of Volume"),
+        panel->takePage(panel->ui.centerOfVolumePage)
+    );
+    inertiaBox
+        = addTaskBox("Std_CoordinateSystem", tr("Inertia"), panel->takePage(panel->ui.inertiaPage));
 
+    updateMeasurementType(false);
     updateInertiaVisibility();
     update(Gui::SelectionChanges());
 }
@@ -430,6 +468,7 @@ void TaskMassProperties::removeTemporaryObjects()
 
 void TaskMassProperties::clearUiFields()
 {
+    updateMeasurementType(false);
     panel->ui.volumeEdit->clear();
     panel->ui.massEdit->clear();
     panel->ui.densityEdit->clear();
@@ -488,7 +527,7 @@ void TaskMassProperties::onSelectionChanged(const Gui::SelectionChanges& msg)
         App::SubObjectT sub(obj, msg.pSubName);
         if (sub.hasSubElement()) {
             std::string promotedSubName = sub.getSubNameNoElement();
-            if (promotedSubName != msg.pSubName) {
+            if (!isFaceSelection(msg.pSubName) && promotedSubName != msg.pSubName) {
                 {
                     QScopedValueRollback<bool> updatingGuard(isUpdating, true);
                     Gui::Selection().rmvSelection(msg.pDocName, msg.pObjectName, msg.pSubName);
@@ -561,7 +600,7 @@ void TaskMassProperties::tryUpdate()
             }
 
             std::string promotedSubName = sub.getSubNameNoElement();
-            if (promotedSubName == sel.SubName) {
+            if (isFaceSelection(sel.SubName) || promotedSubName == sel.SubName) {
                 continue;
             }
 
@@ -811,7 +850,7 @@ void TaskMassProperties::tryUpdate()
 
         std::ostringstream key;
         key << materialObj->getDocument()->getName() << '|' << materialObj->getNameInDocument()
-            << '|' << placement.toMatrix().toString();
+            << '|' << placement.toMatrix().toString() << '|' << (elementName ? elementName : "");
 
         std::string objectKey = key.str();
         if (!objectKeys.insert(objectKey).second) {
@@ -1007,6 +1046,29 @@ void TaskMassProperties::tryUpdate()
 
         Base::Placement rootPlacement
             = getGlobalPlacement(selObj.pObject, selObj.SubName, selObj.pResolvedObject);
+        if (isFaceSelection(selObj.SubName)) {
+            size_t objectsBefore = objectsToMeasure.size();
+            addObject(selObj.pObject, selObj.SubName, rootPlacement, objectKeys);
+
+            if (shouldAddToList && objectsToMeasure.size() > objectsBefore) {
+                QString label = QString::fromStdString(displayObject->getFullLabel());
+                label += QStringLiteral(" (") + QString::fromUtf8(selObj.SubName)
+                    + QStringLiteral(")");
+                auto* item = new QListWidgetItem(label);
+                QString docName;
+                if (auto* doc = selObj.pObject->getDocument()) {
+                    docName = QString::fromUtf8(doc->getName());
+                }
+                QString objName = QString::fromUtf8(selObj.pObject->getNameInDocument());
+                item->setData(
+                    Qt::UserRole,
+                    docName + QStringLiteral("|") + objName + QStringLiteral("|")
+                        + QString::fromUtf8(selObj.SubName)
+                );
+                panel->ui.objectList->addItem(item);
+            }
+            continue;
+        }
         Base::Placement parentPlacement = rootPlacement * getPlacementFromObject(leaf).inverse();
         visited.clear();
         size_t objectsBefore = objectsToMeasure.size();
@@ -1047,8 +1109,6 @@ void TaskMassProperties::tryUpdate()
         return;
     }
 
-    updateInertiaVisibility();
-
     MassPropertiesData info = CalculateMassProperties(
         objectsToMeasure,
         currentMode,
@@ -1056,7 +1116,15 @@ void TaskMassProperties::tryUpdate()
         hasCurrentDatumPlacement ? &currentDatumPlacement : nullptr
     );
 
-    if (info.volume.getValue() == 0.0 && info.mass.getValue() == 0.0) {
+    if (!info.isSurface && info.volume.getValue() == 0.0 && info.mass.getValue() == 0.0) {
+        this->clearUiFields();
+        this->removeTemporaryObjects();
+        objectsToMeasure.clear();
+        panel->ui.objectList->clear();
+        return;
+    }
+
+    if (info.isSurface && info.surfaceArea.getValue() == 0.0) {
         this->clearUiFields();
         this->removeTemporaryObjects();
         objectsToMeasure.clear();
@@ -1065,6 +1133,8 @@ void TaskMassProperties::tryUpdate()
     }
 
     currentInfo = info;
+    updateMeasurementType(info.isSurface);
+    updateInertiaVisibility();
 
     if (currentMode == MassPropertiesMode::Custom && referenceDatum) {
         auto applyOriginOffset = [&](const Base::Vector3d& originPos) {
@@ -1118,10 +1188,12 @@ void TaskMassProperties::tryUpdate()
 
     const QString densitySuffix = objectsToMeasure.size() > 1 ? tr(" (Average)") : QString();
 
-    setText(panel->ui.volumeEdit, info.volume);
-    setText(panel->ui.massEdit, info.mass);
+    if (!info.isSurface) {
+        setText(panel->ui.volumeEdit, info.volume);
+        setText(panel->ui.massEdit, info.mass);
+        setText(panel->ui.densityEdit, info.density, densitySuffix);
+    }
     setText(panel->ui.surfaceAreaEdit, info.surfaceArea);
-    setText(panel->ui.densityEdit, info.density, densitySuffix);
 
     setText(panel->ui.cogXText, Base::Quantity(info.cog.x, Base::Unit::Length));
     setText(panel->ui.cogYText, Base::Quantity(info.cog.y, Base::Unit::Length));
@@ -1130,17 +1202,18 @@ void TaskMassProperties::tryUpdate()
     setText(panel->ui.covYText, Base::Quantity(info.cov.y, Base::Unit::Length));
     setText(panel->ui.covZText, Base::Quantity(info.cov.z, Base::Unit::Length));
 
-    setText(panel->ui.inertiaJoxText, Base::Quantity(info.inertiaJo.x, Base::Unit::Inertia));
-    setText(panel->ui.inertiaJoyText, Base::Quantity(info.inertiaJo.y, Base::Unit::Inertia));
-    setText(panel->ui.inertiaJozText, Base::Quantity(info.inertiaJo.z, Base::Unit::Inertia));
-    setText(panel->ui.inertiaJxyText, Base::Quantity(info.inertiaJCross.x, Base::Unit::Inertia));
-    setText(panel->ui.inertiaJzxText, Base::Quantity(info.inertiaJCross.y, Base::Unit::Inertia));
-    setText(panel->ui.inertiaJzyText, Base::Quantity(info.inertiaJCross.z, Base::Unit::Inertia));
+    const Base::Unit inertiaUnit = info.isSurface ? Base::Unit(4) : Base::Unit::Inertia;
+    setText(panel->ui.inertiaJoxText, Base::Quantity(info.inertiaJo.x, inertiaUnit));
+    setText(panel->ui.inertiaJoyText, Base::Quantity(info.inertiaJo.y, inertiaUnit));
+    setText(panel->ui.inertiaJozText, Base::Quantity(info.inertiaJo.z, inertiaUnit));
+    setText(panel->ui.inertiaJxyText, Base::Quantity(info.inertiaJCross.x, inertiaUnit));
+    setText(panel->ui.inertiaJzxText, Base::Quantity(info.inertiaJCross.y, inertiaUnit));
+    setText(panel->ui.inertiaJzyText, Base::Quantity(info.inertiaJCross.z, inertiaUnit));
 
-    setText(panel->ui.inertiaJxText, Base::Quantity(info.inertiaJ.x, Base::Unit::Inertia));
-    setText(panel->ui.inertiaJyText, Base::Quantity(info.inertiaJ.y, Base::Unit::Inertia));
-    setText(panel->ui.inertiaJzText, Base::Quantity(info.inertiaJ.z, Base::Unit::Inertia));
-    setText(panel->ui.axisInertiaText, Base::Quantity(info.axisInertia, Base::Unit::Inertia));
+    setText(panel->ui.inertiaJxText, Base::Quantity(info.inertiaJ.x, inertiaUnit));
+    setText(panel->ui.inertiaJyText, Base::Quantity(info.inertiaJ.y, inertiaUnit));
+    setText(panel->ui.inertiaJzText, Base::Quantity(info.inertiaJ.z, inertiaUnit));
+    setText(panel->ui.axisInertiaText, Base::Quantity(info.axisInertia, inertiaUnit));
 
     const bool hasAxisSelection = currentMode == MassPropertiesMode::Custom && referenceDatum
         && referenceDatum->isDerivedFrom<App::Line>();
@@ -1170,7 +1243,7 @@ void TaskMassProperties::tryUpdate()
         }
 
         if (auto* resultView = dynamic_cast<ViewProviderMassPropertiesResult*>(view)) {
-            resultView->setCenters(infoSnapshot.cog, infoSnapshot.cov);
+            resultView->setCenters(infoSnapshot.cog, infoSnapshot.cov, !infoSnapshot.isSurface);
             resultView->setPrincipalAxes(
                 infoSnapshot.cog,
                 infoSnapshot.principalAxis1,
@@ -1201,6 +1274,59 @@ void TaskMassProperties::updateInertiaVisibility()
     panel->ui.inertiaDiagLayout->invalidate();
     panel->ui.inertiaMatrixLabel->setVisible(!hasAxisSelection);
     panel->ui.inertiaPrincipalLabel->setVisible(!hasAxisSelection);
+}
+
+void TaskMassProperties::updateMeasurementType(bool isSurface)
+{
+    panel->ui.volumeLabel->setVisible(!isSurface);
+    panel->ui.volumeEdit->setVisible(!isSurface);
+    panel->ui.massLabel->setVisible(!isSurface);
+    panel->ui.massEdit->setVisible(!isSurface);
+    panel->ui.densityLabel->setVisible(!isSurface);
+    panel->ui.densityEdit->setVisible(!isSurface);
+
+    panel->ui.surfaceAreaLabel->setText(isSurface ? tr("Area") : tr("Surface area"));
+    panel->ui.centerOfGravityRadioButton->setText(
+        isSurface ? tr("Center of area") : tr("Center of gravity")
+    );
+    panel->ui.axisLabel->setText(
+        isSurface ? tr("Second moment around axis") : tr("Inertia around axis")
+    );
+    panel->ui.inertiaMatrixLabel->setText(
+        isSurface ? tr("Second Moment of Area Matrix") : tr("Inertia Matrix")
+    );
+    panel->ui.inertiaPrincipalLabel->setText(
+        isSurface ? tr("Principal Second Moments of Area") : tr("Principal Moments of Inertia")
+    );
+
+    if (physicalPropertiesBox) {
+        physicalPropertiesBox->setHeaderText(
+            isSurface ? tr("Area Properties") : tr("Physical Properties")
+        );
+    }
+    if (centerOfGravityBox) {
+        centerOfGravityBox->setHeaderText(isSurface ? tr("Center of Area") : tr("Center of Gravity"));
+    }
+    if (centerOfVolumeBox) {
+        centerOfVolumeBox->setVisible(!isSurface);
+    }
+    if (inertiaBox) {
+        inertiaBox->setHeaderText(isSurface ? tr("Second Moment of Area") : tr("Inertia"));
+    }
+
+    panel->ui.unitsComboBox->setItemText(
+        UnitsInternal,
+        isSurface ? tr("mm, mm^4") : tr("mm, kg, kg*mm^2")
+    );
+    panel->ui.unitsComboBox->setItemText(UnitsMks, isSurface ? tr("m, m^4") : tr("m, kg, kg*m^2"));
+    panel->ui.unitsComboBox->setItemText(
+        UnitsImperial,
+        isSurface ? tr("in, in^4") : tr("in, lb, lb*in^2")
+    );
+    panel->ui.unitsComboBox->setItemText(
+        UnitsImperialCivil,
+        isSurface ? tr("ft, ft^4") : tr("ft, lb, lb*ft^2")
+    );
 }
 
 void TaskMassProperties::createDatum(
@@ -1305,7 +1431,7 @@ void TaskMassProperties::createLCS(std::string name, bool removeExisting)
 
 void TaskMassProperties::onCogDatumButtonPressed()
 {
-    createDatum(currentInfo.cog, "Center_of_Gravity", false);
+    createDatum(currentInfo.cog, currentInfo.isSurface ? "Center_of_Area" : "Center_of_Gravity", false);
 }
 
 void TaskMassProperties::onCovDatumButtonPressed()
@@ -1435,93 +1561,130 @@ void TaskMassProperties::saveResult()
     setString(
         "Mode",
         "Parameters",
-        currentMode == MassPropertiesMode::Custom ? "Custom" : "Center of gravity"
+        currentMode == MassPropertiesMode::Custom
+            ? "Custom"
+            : (currentInfo.isSurface ? "Center of area" : "Center of gravity")
     );
-
-    setQuantity("Volume", "Physical Properties", currentInfo.volume);
-    setQuantity("Mass", "Physical Properties", currentInfo.mass);
-    setQuantity("Density", "Physical Properties", currentInfo.density);
-    setQuantity("SurfaceArea", "Physical Properties", currentInfo.surfaceArea);
-
-    setQuantity(
-        "CenterOfGravityX",
-        "Center of Gravity",
-        Base::Quantity(currentInfo.cog.x, Base::Unit::Length)
-    );
-    setQuantity(
-        "CenterOfGravityY",
-        "Center of Gravity",
-        Base::Quantity(currentInfo.cog.y, Base::Unit::Length)
-    );
-    setQuantity(
-        "CenterOfGravityZ",
-        "Center of Gravity",
-        Base::Quantity(currentInfo.cog.z, Base::Unit::Length)
-    );
-    setQuantity(
-        "CenterOfVolumeX",
-        "Center of Volume",
-        Base::Quantity(currentInfo.cov.x, Base::Unit::Length)
-    );
-    setQuantity(
-        "CenterOfVolumeY",
-        "Center of Volume",
-        Base::Quantity(currentInfo.cov.y, Base::Unit::Length)
-    );
-    setQuantity(
-        "CenterOfVolumeZ",
-        "Center of Volume",
-        Base::Quantity(currentInfo.cov.z, Base::Unit::Length)
-    );
+    setString("MeasurementType", "Parameters", currentInfo.isSurface ? "Area" : "Volume");
 
     const bool hasAxisSelection = currentMode == MassPropertiesMode::Custom && currentDatum
         && currentDatum->isDerivedFrom<App::Line>();
+    const Base::Unit inertiaUnit = currentInfo.isSurface ? Base::Unit(4) : Base::Unit::Inertia;
+    const char* inertiaGroup = currentInfo.isSurface ? "Second Moment of Area" : "Inertia";
+
+    if (currentInfo.isSurface) {
+        setQuantity("Area", "Area Properties", currentInfo.surfaceArea);
+        setQuantity(
+            "CenterOfAreaX",
+            "Center of Area",
+            Base::Quantity(currentInfo.cog.x, Base::Unit::Length)
+        );
+        setQuantity(
+            "CenterOfAreaY",
+            "Center of Area",
+            Base::Quantity(currentInfo.cog.y, Base::Unit::Length)
+        );
+        setQuantity(
+            "CenterOfAreaZ",
+            "Center of Area",
+            Base::Quantity(currentInfo.cog.z, Base::Unit::Length)
+        );
+    }
+    else {
+        setQuantity("Volume", "Physical Properties", currentInfo.volume);
+        setQuantity("Mass", "Physical Properties", currentInfo.mass);
+        setQuantity("Density", "Physical Properties", currentInfo.density);
+        setQuantity("SurfaceArea", "Physical Properties", currentInfo.surfaceArea);
+
+        setQuantity(
+            "CenterOfGravityX",
+            "Center of Gravity",
+            Base::Quantity(currentInfo.cog.x, Base::Unit::Length)
+        );
+        setQuantity(
+            "CenterOfGravityY",
+            "Center of Gravity",
+            Base::Quantity(currentInfo.cog.y, Base::Unit::Length)
+        );
+        setQuantity(
+            "CenterOfGravityZ",
+            "Center of Gravity",
+            Base::Quantity(currentInfo.cog.z, Base::Unit::Length)
+        );
+        setQuantity(
+            "CenterOfVolumeX",
+            "Center of Volume",
+            Base::Quantity(currentInfo.cov.x, Base::Unit::Length)
+        );
+        setQuantity(
+            "CenterOfVolumeY",
+            "Center of Volume",
+            Base::Quantity(currentInfo.cov.y, Base::Unit::Length)
+        );
+        setQuantity(
+            "CenterOfVolumeZ",
+            "Center of Volume",
+            Base::Quantity(currentInfo.cov.z, Base::Unit::Length)
+        );
+    }
 
     if (hasAxisSelection) {
         setQuantity(
-            "AxisInertia",
-            "Inertia",
-            Base::Quantity(currentInfo.axisInertia, Base::Unit::Inertia)
+            currentInfo.isSurface ? "AxisSecondMoment" : "AxisInertia",
+            inertiaGroup,
+            Base::Quantity(currentInfo.axisInertia, inertiaUnit)
         );
     }
     else {
         setQuantity(
-            "InertiaJox",
-            "Inertia",
-            Base::Quantity(currentInfo.inertiaJo.x, Base::Unit::Inertia)
+            currentInfo.isSurface ? "SecondMomentX" : "InertiaJox",
+            inertiaGroup,
+            Base::Quantity(currentInfo.inertiaJo.x, inertiaUnit)
         );
         setQuantity(
-            "InertiaJoy",
-            "Inertia",
-            Base::Quantity(currentInfo.inertiaJo.y, Base::Unit::Inertia)
+            currentInfo.isSurface ? "SecondMomentY" : "InertiaJoy",
+            inertiaGroup,
+            Base::Quantity(currentInfo.inertiaJo.y, inertiaUnit)
         );
         setQuantity(
-            "InertiaJoz",
-            "Inertia",
-            Base::Quantity(currentInfo.inertiaJo.z, Base::Unit::Inertia)
+            currentInfo.isSurface ? "SecondMomentZ" : "InertiaJoz",
+            inertiaGroup,
+            Base::Quantity(currentInfo.inertiaJo.z, inertiaUnit)
         );
         setQuantity(
-            "InertiaJxy",
-            "Inertia",
-            Base::Quantity(currentInfo.inertiaJCross.x, Base::Unit::Inertia)
+            currentInfo.isSurface ? "SecondMomentXY" : "InertiaJxy",
+            inertiaGroup,
+            Base::Quantity(currentInfo.inertiaJCross.x, inertiaUnit)
         );
         setQuantity(
-            "InertiaJzx",
-            "Inertia",
-            Base::Quantity(currentInfo.inertiaJCross.y, Base::Unit::Inertia)
+            currentInfo.isSurface ? "SecondMomentZX" : "InertiaJzx",
+            inertiaGroup,
+            Base::Quantity(currentInfo.inertiaJCross.y, inertiaUnit)
         );
         setQuantity(
-            "InertiaJzy",
-            "Inertia",
-            Base::Quantity(currentInfo.inertiaJCross.z, Base::Unit::Inertia)
+            currentInfo.isSurface ? "SecondMomentZY" : "InertiaJzy",
+            inertiaGroup,
+            Base::Quantity(currentInfo.inertiaJCross.z, inertiaUnit)
         );
-        setQuantity("InertiaJx", "Inertia", Base::Quantity(currentInfo.inertiaJ.x, Base::Unit::Inertia));
-        setQuantity("InertiaJy", "Inertia", Base::Quantity(currentInfo.inertiaJ.y, Base::Unit::Inertia));
-        setQuantity("InertiaJz", "Inertia", Base::Quantity(currentInfo.inertiaJ.z, Base::Unit::Inertia));
+        setQuantity(
+            currentInfo.isSurface ? "PrincipalSecondMoment1" : "InertiaJx",
+            inertiaGroup,
+            Base::Quantity(currentInfo.inertiaJ.x, inertiaUnit)
+        );
+        setQuantity(
+            currentInfo.isSurface ? "PrincipalSecondMoment2" : "InertiaJy",
+            inertiaGroup,
+            Base::Quantity(currentInfo.inertiaJ.y, inertiaUnit)
+        );
+        setQuantity(
+            currentInfo.isSurface ? "PrincipalSecondMoment3" : "InertiaJz",
+            inertiaGroup,
+            Base::Quantity(currentInfo.inertiaJ.z, inertiaUnit)
+        );
 
-        setVector("PrincipalAxis1", "Inertia", currentInfo.principalAxis1);
-        setVector("PrincipalAxis2", "Inertia", currentInfo.principalAxis2);
-        setVector("PrincipalAxis3", "Inertia", currentInfo.principalAxis3);
+        setVector("PrincipalAxis1", inertiaGroup, currentInfo.principalAxis1);
+        setVector("PrincipalAxis2", inertiaGroup, currentInfo.principalAxis2);
+        setVector("PrincipalAxis3", inertiaGroup, currentInfo.principalAxis3);
     }
 
     if (group) {
@@ -1532,7 +1695,7 @@ void TaskMassProperties::saveResult()
     if (auto* guiDoc = Gui::Application::Instance->activeDocument()) {
         if (auto* view = dynamic_cast<Gui::ViewProviderDocumentObject*>(guiDoc->getViewProvider(obj))) {
             if (auto* resultView = dynamic_cast<ViewProviderMassPropertiesResult*>(view)) {
-                resultView->setCenters(currentInfo.cog, currentInfo.cov);
+                resultView->setCenters(currentInfo.cog, currentInfo.cov, !currentInfo.isSurface);
                 resultView->setPrincipalAxes(
                     currentInfo.cog,
                     currentInfo.principalAxis1,

@@ -70,6 +70,7 @@ public:
     void onCoordinateSystemChanged(MassPropertiesMode coordSystemMode);
     void onSelectCustomCoordinateSystem();
     void updateInertiaVisibility();
+    void updateMeasurementType(bool isSurface);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -81,6 +82,10 @@ private:
     void saveResult();
 
     TaskMassPropertiesWidget* panel = nullptr;
+    Gui::TaskView::TaskBox* physicalPropertiesBox = nullptr;
+    Gui::TaskView::TaskBox* centerOfGravityBox = nullptr;
+    Gui::TaskView::TaskBox* centerOfVolumeBox = nullptr;
+    Gui::TaskView::TaskBox* inertiaBox = nullptr;
 
     bool selectingCustomCoordSystem = false;
     bool isUpdating = false;

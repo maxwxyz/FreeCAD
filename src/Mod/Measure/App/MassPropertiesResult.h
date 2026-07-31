@@ -61,6 +61,10 @@ struct MeasureExport MassPropertiesData
     Base::Vector3d principalAxis3 {0.0, 0.0, 0.0};
 
     double axisInertia;
+
+    /// True when the result was calculated from surfaces rather than solids.
+    /// In that case inertia values are second moments of area (length^4).
+    bool isSurface = false;
 };
 
 struct MeasureExport MassPropertiesInput

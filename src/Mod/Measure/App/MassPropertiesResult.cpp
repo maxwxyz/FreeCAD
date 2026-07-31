@@ -33,6 +33,7 @@
 #include <Base/Converter.h>
 
 #include <TopoDS_Shape.hxx>
+#include <TopExp_Explorer.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <gp_Trsf.hxx>
 #include <GProp_GProps.hxx>
@@ -45,11 +46,38 @@
 #include <math_Vector.hxx>
 
 #include <map>
+#include <optional>
 #include <unordered_set>
 #include <string>
 #include <vector>
 #include <cmath>
 #include <QString>
+
+namespace
+{
+
+bool isSurfaceShape(const TopoDS_Shape& shape)
+{
+    if (shape.ShapeType() == TopAbs_SOLID || shape.ShapeType() == TopAbs_COMPSOLID) {
+        return false;
+    }
+
+    for (TopExp_Explorer explorer(shape, TopAbs_SOLID); explorer.More(); explorer.Next()) {
+        return false;
+    }
+
+    if (shape.ShapeType() == TopAbs_FACE || shape.ShapeType() == TopAbs_SHELL) {
+        return true;
+    }
+
+    for (TopExp_Explorer explorer(shape, TopAbs_FACE); explorer.More(); explorer.Next()) {
+        return true;
+    }
+
+    return false;
+}
+
+}  // namespace
 
 MassPropertiesData CalculateMassProperties(
     const std::vector<MassPropertiesInput>& objects,
@@ -69,6 +97,7 @@ MassPropertiesData CalculateMassProperties(
 
     double totalVolume = 0.0;
     bool hasShape = false;
+    std::optional<bool> surfaceSelection;
 
     for (const auto& object : objects) {
         App::DocumentObject* obj = object.object;
@@ -88,6 +117,15 @@ MassPropertiesData CalculateMassProperties(
 
         if (shape.IsNull()) {
             continue;
+        }
+
+        const bool isSurface = isSurfaceShape(shape);
+        if (!surfaceSelection) {
+            surfaceSelection = isSurface;
+        }
+        else if (*surfaceSelection != isSurface) {
+            // A volume and a surface do not have a common physical measure.
+            return data;
         }
 
         if (!object.placement.isIdentity()) {
@@ -117,40 +155,44 @@ MassPropertiesData CalculateMassProperties(
 
         Part::Feature* part = materialFeature(obj);
 
-        Materials::Material mat;
-        // Fallback density the units 1e-6 kg/mm^3 (1000 kg/m^3)
-        double density = 1.0e-6;
-
-        const QString densityMaterialProperty = QStringLiteral("Density");
-
-        if (part) {
-            mat = part->ShapeMaterial.getValue();
-        }
-        if (mat.hasPhysicalProperty(densityMaterialProperty)) {
-            try {
-                if (mat.getName() != QStringLiteral("Default")) {
-                    density = mat.getPhysicalQuantity(densityMaterialProperty).getValue();
-                }
-            }
-            catch (...) {
-                Base::Console().message(
-                    "Error retrieving density from material. Using default value.\n"
-                );
-            }
-        }
-        else {
-            Base::Console().message("Density property not found for material. Using default value.\n");
-        }
-
-        GProp_GProps volProps;
-        BRepGProp::VolumeProperties(shape, volProps);
-        globalVolumeProps.Add(volProps);
-
         GProp_GProps surfProps;
         BRepGProp::SurfaceProperties(shape, surfProps);
 
-        totalVolume += volProps.Mass();
-        globalMassProps.Add(volProps, density);
+        if (!isSurface) {
+            Materials::Material mat;
+            // Fallback density the units 1e-6 kg/mm^3 (1000 kg/m^3)
+            double density = 1.0e-6;
+
+            const QString densityMaterialProperty = QStringLiteral("Density");
+
+            if (part) {
+                mat = part->ShapeMaterial.getValue();
+            }
+            if (mat.hasPhysicalProperty(densityMaterialProperty)) {
+                try {
+                    if (mat.getName() != QStringLiteral("Default")) {
+                        density = mat.getPhysicalQuantity(densityMaterialProperty).getValue();
+                    }
+                }
+                catch (...) {
+                    Base::Console().message(
+                        "Error retrieving density from material. Using default value.\n"
+                    );
+                }
+            }
+            else {
+                Base::Console().message(
+                    "Density property not found for material. Using default value.\n"
+                );
+            }
+
+            GProp_GProps volProps;
+            BRepGProp::VolumeProperties(shape, volProps);
+            globalVolumeProps.Add(volProps);
+            totalVolume += volProps.Mass();
+            globalMassProps.Add(volProps, density);
+        }
+
         globalSurfaceProps.Add(surfProps);
 
         hasShape = true;
@@ -160,6 +202,7 @@ MassPropertiesData CalculateMassProperties(
         return data;
     }
 
+    data.isSurface = *surfaceSelection;
     data.volume = Base::Quantity(totalVolume, Base::Unit::Volume);
     data.mass = Base::Quantity(globalMassProps.Mass(), Base::Unit::Mass);
     data.surfaceArea = Base::Quantity(globalSurfaceProps.Mass(), Base::Unit::Area);
@@ -169,11 +212,13 @@ MassPropertiesData CalculateMassProperties(
             = Base::Quantity(data.mass.getValue() / data.volume.getValue(), Base::Unit::Density);
     }
 
-    data.cog = Base::convertTo<Base::Vector3d>(globalMassProps.CentreOfMass());
-    data.cov = Base::convertTo<Base::Vector3d>(globalVolumeProps.CentreOfMass());
+    const GProp_GProps& integralProps = data.isSurface ? globalSurfaceProps : globalMassProps;
+    data.cog = Base::convertTo<Base::Vector3d>(integralProps.CentreOfMass());
+    data.cov = data.isSurface ? data.cog
+                              : Base::convertTo<Base::Vector3d>(globalVolumeProps.CentreOfMass());
 
 
-    gp_Mat inertia = globalMassProps.MatrixOfInertia();
+    gp_Mat inertia = integralProps.MatrixOfInertia();
 
     GProp_PrincipalProps principal;
 
@@ -181,7 +226,7 @@ MassPropertiesData CalculateMassProperties(
         data.inertiaJo = Base::Vector3d(inertia(1, 1), inertia(2, 2), inertia(3, 3));
         data.inertiaJCross = Base::Vector3d(inertia(1, 2), inertia(1, 3), inertia(2, 3));
 
-        principal = globalMassProps.PrincipalProperties();
+        principal = integralProps.PrincipalProperties();
 
         if (principal.HasSymmetryPoint()) {
             data.principalAxis1 = Base::Vector3d::UnitX;
@@ -300,7 +345,7 @@ MassPropertiesData CalculateMassProperties(
         double dy = data.cog.y - customOrigin.y;
         double dz = data.cog.z - customOrigin.z;
 
-        double m = globalMassProps.Mass();
+        double m = integralProps.Mass();
 
         double r_dot_r = dx * dx + dy * dy + dz * dz;
 

@@ -2,6 +2,7 @@
 
 add_executable(Measure_tests_run
         MeasureDistance.cpp
+        MassPropertiesResult.cpp
         MeasurePosition.cpp
 )
 

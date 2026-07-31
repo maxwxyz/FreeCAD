@@ -155,35 +155,46 @@ void ViewProviderMassPropertiesResult::attach(App::DocumentObject* obj)
     addAxisLabel("2", lcsLabel2Color, lcsLabel2Translation);
     addAxisLabel("3", lcsLabel3Color, lcsLabel3Translation);
 
-    auto addMarker = [annotation](const char* iconName, SoTranslation*& translation) {
-        auto* markerSep = new SoSeparator();
-        translation = new SoTranslation();
-        auto* image = new SoImage();
+    auto addMarker =
+        [annotation](const char* iconName, SoTranslation*& translation, SoSwitch*& markerSwitch) {
+            markerSwitch = new SoSwitch(SO_SWITCH_ALL);
+            annotation->addChild(markerSwitch);
 
-        image->horAlignment = SoImage::CENTER;
-        image->vertAlignment = SoImage::HALF;
+            auto* markerSep = new SoSeparator();
+            translation = new SoTranslation();
+            auto* image = new SoImage();
 
-        QPixmap pixmap = Gui::BitmapFactory().pixmapFromSvg(iconName, QSize(16, 16));
-        SoSFImage iconData;
-        Gui::BitmapFactory().convert(pixmap.toImage(), iconData);
-        image->image = iconData;
+            image->horAlignment = SoImage::CENTER;
+            image->vertAlignment = SoImage::HALF;
 
-        markerSep->addChild(translation);
-        markerSep->addChild(image);
-        annotation->addChild(markerSep);
-    };
+            QPixmap pixmap = Gui::BitmapFactory().pixmapFromSvg(iconName, QSize(16, 16));
+            SoSFImage iconData;
+            Gui::BitmapFactory().convert(pixmap.toImage(), iconData);
+            image->image = iconData;
 
-    addMarker("COG-Icon", cogTranslation);
-    addMarker("COV-Icon", covTranslation);
+            markerSep->addChild(translation);
+            markerSep->addChild(image);
+            markerSwitch->addChild(markerSep);
+        };
+
+    addMarker("COG-Icon", cogTranslation, cogSwitch);
+    addMarker("COV-Icon", covTranslation, covSwitch);
 
     updateCenterMarkers();
     updatePrincipalAxesMarker();
 }
 
-void ViewProviderMassPropertiesResult::setCenters(const Base::Vector3d& cog, const Base::Vector3d& cov)
+void ViewProviderMassPropertiesResult::setCenters(
+    const Base::Vector3d& cog,
+    const Base::Vector3d& cov,
+    bool showCenterOfVolume
+)
 {
     centerOfGravity = cog;
     centerOfVolume = cov;
+    if (covSwitch) {
+        covSwitch->whichChild = showCenterOfVolume ? SO_SWITCH_ALL : SO_SWITCH_NONE;
+    }
     updateCenterMarkers();
 }
 
